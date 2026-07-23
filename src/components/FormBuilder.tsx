@@ -34,6 +34,7 @@ export default function FormBuilder() {
   const [sidebarTab, setSidebarTab] = useState<'style' | 'settings' | 'navigation' | 'export'>('style');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [mobileActiveTab, setMobileActiveTab] = useState<'editor' | 'settings' | 'preview'>('editor');
 
   // Saving State
   const [isSaving, setIsSaving] = useState(false);
@@ -422,7 +423,7 @@ export default function FormBuilder() {
       <header className="h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between z-30 shrink-0 shadow-sm">
         
         {/* Left Section: Back, Title (Click to edit), Status Badge */}
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => navigate('/')}
@@ -435,7 +436,7 @@ export default function FormBuilder() {
           <div className="h-5 w-px bg-slate-200/80 hidden sm:block shrink-0" />
 
           {/* Form Title Direct Editing */}
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             {isEditingTitle ? (
               <input
                 type="text"
@@ -444,16 +445,16 @@ export default function FormBuilder() {
                 onChange={(e) => setQuestionnaire({ ...questionnaire, title: e.target.value })}
                 onBlur={() => setIsEditingTitle(false)}
                 onKeyDown={(e) => e.key === 'Enter' && setIsEditingTitle(false)}
-                className="px-3 py-1 bg-white border-2 border-blue-500 rounded-xl font-bold text-slate-900 text-sm sm:text-base outline-none shadow-sm"
+                className="px-3 py-1 bg-white border-2 border-blue-500 rounded-xl font-bold text-slate-900 text-xs sm:text-base outline-none shadow-sm max-w-[120px] sm:max-w-none"
               />
             ) : (
               <button
                 onClick={() => setIsEditingTitle(true)}
-                className="group flex items-center gap-2 font-extrabold text-slate-800 hover:text-blue-600 text-sm sm:text-lg tracking-tight truncate transition-colors text-left"
+                className="group flex items-center gap-1 sm:gap-2 font-extrabold text-slate-800 hover:text-blue-600 text-xs sm:text-lg tracking-tight truncate transition-colors text-left max-w-[120px] xs:max-w-[160px] sm:max-w-xs"
                 title="Cliquer pour modifier le titre"
               >
                 <span className="truncate">{questionnaire.title || 'Mon Questionnaire'}</span>
-                <span className="text-xs text-slate-400 group-hover:text-blue-500 font-normal shrink-0">✎</span>
+                <span className="text-[10px] text-slate-400 group-hover:text-blue-500 font-normal shrink-0">✎</span>
               </button>
             )}
 
@@ -463,7 +464,7 @@ export default function FormBuilder() {
                 ...questionnaire,
                 status: questionnaire.status === 'published' ? 'draft' : 'published'
               })}
-              className={`px-3 py-1 text-xs font-bold rounded-full flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
+              className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full items-center gap-1 shrink-0 transition-all cursor-pointer hidden sm:flex ${
                 questionnaire.status === 'published'
                   ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300/50'
                   : 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300/50'
@@ -471,19 +472,19 @@ export default function FormBuilder() {
               title="Cliquer pour changer le statut"
             >
               <div className={`w-1.5 h-1.5 rounded-full ${questionnaire.status === 'published' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-              <span>{questionnaire.status === 'published' ? 'Publié' : 'Brouillon'}</span>
+              <span>{questionnaire.status === 'published' ? 'Publé' : 'Brouillon'}</span>
             </button>
           </div>
         </div>
 
         {/* Right Section: Preview Toggle, Save Button, Sidebar Collapse Toggle */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           
           {/* Supabase Status Button */}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsSupabaseModalOpen(true)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+            className={`items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border hidden md:flex ${
               isSupabaseConfigured()
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                 : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
@@ -499,7 +500,7 @@ export default function FormBuilder() {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsPreviewOpen(!isPreviewOpen)}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border ${
+            className={`items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all border hidden md:flex ${
               isPreviewOpen
                 ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200'
@@ -514,7 +515,7 @@ export default function FormBuilder() {
             whileTap={{ scale: 0.95 }}
             onClick={saveToSupabase}
             disabled={isSaving}
-            className={`flex items-center gap-2 px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold text-white transition-all shadow-md focus:outline-none ${
+            className={`flex items-center gap-1.5 px-3 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold text-white transition-all shadow-md focus:outline-none ${
               saveStatus === 'success'
                 ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
                 : saveStatus === 'error'
@@ -523,24 +524,24 @@ export default function FormBuilder() {
             }`}
           >
             {isSaving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : saveStatus === 'success' ? (
-              <Check className="w-4 h-4 text-emerald-200" />
+              <Check className="w-3.5 h-3.5 text-emerald-200" />
             ) : (
-              <Save className="w-4 h-4" />
+              <Save className="w-3.5 h-3.5" />
             )}
             <span>
               {isSaving ? 'Sauvegarde...' : saveStatus === 'success' ? 'Enregistré !' : 'Enregistrer'}
             </span>
           </motion.button>
 
-          <div className="h-5 w-px bg-slate-200/80 hidden sm:block shrink-0" />
+          <div className="h-5 w-px bg-slate-200/80 hidden md:block shrink-0" />
 
           {/* Sidebar Collapse Toggle Icon Button */}
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className={`p-2 rounded-xl border transition-all ${
+            className={`p-2 rounded-xl border transition-all hidden md:flex ${
               isSidebarOpen
                 ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
                 : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
@@ -561,7 +562,7 @@ export default function FormBuilder() {
         {/* ========================================== */}
         {/* 2. ZONE PRINCIPALE (CANVAS CENTRAL)        */}
         {/* ========================================== */}
-        <main className="flex-1 overflow-y-auto px-4 sm:px-8 py-8 transition-all duration-300 ease-in-out">
+        <main className={`flex-1 overflow-y-auto px-4 sm:px-8 py-8 pb-24 md:pb-8 transition-all duration-300 ease-in-out ${mobileActiveTab === 'editor' ? 'block' : 'hidden md:block'}`}>
           <div className="max-w-4xl mx-auto space-y-8 pb-32">
 
             {/* Error / Warning Notification Banner */}
@@ -828,33 +829,33 @@ export default function FormBuilder() {
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.95 }}
                               transition={{ duration: 0.2 }}
-                              className="bg-white rounded-2xl p-6 shadow-lg shadow-slate-200/50 border border-slate-200/80 hover:border-blue-300 transition-all space-y-5 relative group"
-                            >
-                              {/* Question Card Top Controls Bar */}
-                              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                                
-                                <div className="flex items-center gap-2">
-                                  {/* Code Badge (e.g. s1q1) */}
-                                  <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200/60 shadow-xs">
-                                    {q.question_code || `s${sIndex + 1}q${qIndex + 1}`}
-                                  </span>
+              className="bg-white rounded-2xl p-4 sm:p-6 shadow-lg shadow-slate-200/50 border border-slate-200/80 hover:border-blue-300 transition-all space-y-5 relative group"
+            >
+              {/* Question Card Top Controls Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                
+                <div className="flex items-center gap-2">
+                  {/* Code Badge (e.g. s1q1) */}
+                  <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200/60 shadow-xs">
+                    {q.question_code || `s${sIndex + 1}q${qIndex + 1}`}
+                  </span>
 
-                                  {/* Question Type Badge Selector */}
-                                  <select
-                                    value={q.type}
-                                    onChange={(e) => updateQuestion(q.id, { type: e.target.value as QuestionType })}
-                                    className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-1 cursor-pointer outline-none transition-all"
-                                  >
-                                    <option value="text">Texte Court</option>
-                                    <option value="number">Numérique</option>
-                                    <option value="multiple_choice">Choix Unique (Radio)</option>
-                                    <option value="checkbox">Choix Multiple (Cases)</option>
-                                    <option value="select">Menu Déroulant</option>
-                                  </select>
-                                </div>
+                  {/* Question Type Badge Selector */}
+                  <select
+                    value={q.type}
+                    onChange={(e) => updateQuestion(q.id, { type: e.target.value as QuestionType })}
+                    className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-1 cursor-pointer outline-none transition-all"
+                  >
+                    <option value="text">Texte Court</option>
+                    <option value="number">Numérique</option>
+                    <option value="multiple_choice">Choix Unique (Radio)</option>
+                    <option value="checkbox">Choix Multiple (Cases)</option>
+                    <option value="select">Menu Déroulant</option>
+                  </select>
+                </div>
 
-                                {/* Actions Right: Required, Reorder, Settings, Duplicate, Delete */}
-                                <div className="flex items-center gap-2">
+                {/* Actions Right: Required, Reorder, Settings, Duplicate, Delete */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                                   
                                   {/* Required Switch */}
                                   <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 transition-all select-none">
@@ -1156,7 +1157,7 @@ export default function FormBuilder() {
                               </AnimatePresence>
 
                               {/* Direct Button "＋ Ajouter une question" under each card */}
-                              <div className="pt-2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="pt-2 flex justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => addQuestion(section.id, q.id)}
                                   className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-1.5 rounded-full border border-blue-200/60 shadow-xs transition-all flex items-center gap-1.5"
@@ -1200,11 +1201,142 @@ export default function FormBuilder() {
           </div>
         </main>
 
+        {/* Inline Mobile Preview */}
+        {mobileActiveTab === 'preview' && (
+          <div className="flex-1 overflow-y-auto px-4 py-6 md:hidden pb-24" style={{ backgroundColor: settings.background_color, fontFamily }}>
+            <div className="max-w-md mx-auto bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-200/80">
+              {/* Preview Content Header */}
+              <div className="relative h-36 overflow-hidden">
+                {settings.header_bg_image && (
+                  <div
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{
+                      backgroundImage: `url(${settings.header_bg_image})`,
+                      opacity: settings.header_opacity
+                    }}
+                  />
+                )}
+                <div
+                  className="absolute inset-0 mix-blend-multiply"
+                  style={{ backgroundColor: settings.main_color, opacity: 0.8 }}
+                />
+                <div className="absolute inset-0 flex flex-col justify-end p-4 text-white">
+                  {settings.logo_url && (
+                    <img src={settings.logo_url} alt="Logo" className="h-8 w-auto mb-1.5 object-contain self-start" />
+                  )}
+                  <h1 className="text-lg font-black leading-tight truncate">
+                    {questionnaire.title || 'Titre du Questionnaire'}
+                  </h1>
+                  {questionnaire.company_name && (
+                    <span className="text-[10px] text-white/80 font-bold uppercase tracking-wider block mt-0.5">
+                      {questionnaire.company_name}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Form Questions List */}
+              <div className="p-5 space-y-8">
+                {sections.map((section, sIdx) => {
+                  const secQs = questions
+                    .filter(q => q.section_id === section.id)
+                    .sort((a, b) => a.display_order - b.display_order);
+
+                  if (secQs.length === 0) return null;
+
+                  return (
+                    <div key={section.id} className="space-y-5">
+                      <div className="pb-2 border-b border-slate-100">
+                        <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase tracking-wider">
+                          Section {sIdx + 1}
+                        </span>
+                        <h3 className="text-sm font-black text-slate-800 mt-1">{section.title}</h3>
+                        {section.description && (
+                          <div className="text-[11px] text-slate-500 mt-1" dangerouslySetInnerHTML={{ __html: section.description }} />
+                        )}
+                      </div>
+
+                      <div className="space-y-5">
+                        {secQs.map((q) => (
+                          <div key={q.id} className="space-y-1.5">
+                            <label className="block text-xs font-bold text-slate-800">
+                              <span className="text-[10px] font-mono font-bold text-blue-600 mr-1.5 bg-blue-50 px-1 py-0.5 rounded">{q.question_code}</span>
+                              {q.label}
+                              {q.is_required && <span className="text-red-500 ml-1">*</span>}
+                            </label>
+                            {q.description_text && (
+                              <p className="text-[10px] text-slate-400 font-medium">{q.description_text}</p>
+                            )}
+
+                            <div className="mt-1">
+                              {q.type === 'text' && (
+                                <input
+                                  type="text"
+                                  disabled
+                                  placeholder="Réponse texte..."
+                                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs placeholder-slate-400"
+                                />
+                              )}
+
+                              {q.type === 'number' && (
+                                <input
+                                  type="number"
+                                  disabled
+                                  placeholder="Nombre..."
+                                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs placeholder-slate-400"
+                                />
+                              )}
+
+                              {(q.type === 'multiple_choice' || q.type === 'checkbox') && (
+                                <div className="space-y-1.5">
+                                  {(q.options || []).map((opt) => (
+                                    <div key={opt.id} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200/80 rounded-xl text-[11px] text-slate-600">
+                                      <input type={q.type === 'multiple_choice' ? 'radio' : 'checkbox'} disabled className="text-blue-600 scale-90" />
+                                      <span className="truncate">{opt.label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {q.type === 'select' && (
+                                <select disabled className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 bg-none">
+                                  <option>Sélectionnez...</option>
+                                  {(q.options || []).map(opt => (
+                                    <option key={opt.id}>{opt.label}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="pt-4 border-t border-slate-100 flex justify-end">
+                  <button
+                    disabled
+                    className="px-6 py-2 text-white font-bold text-xs rounded-xl shadow-md opacity-80"
+                    style={{ backgroundColor: settings.main_color }}
+                  >
+                    Soumettre
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ========================================== */}
         {/* 3. BARRE LATÉRALE RÉGLAGES (RIGHT SIDEBAR) */}
         {/* ========================================== */}
         <aside className={`shrink-0 bg-white/80 backdrop-blur-xl border-l border-slate-200/80 flex flex-col h-full shadow-2xl z-20 transition-all duration-300 ease-in-out ${
-          isSidebarOpen ? 'w-[360px] lg:w-[400px]' : 'w-0 overflow-hidden opacity-0 pointer-events-none'
+          mobileActiveTab === 'settings'
+            ? 'w-full flex pb-20'
+            : isSidebarOpen
+            ? 'hidden md:flex md:w-[360px] lg:w-[400px]'
+            : 'hidden md:flex md:w-0 md:overflow-hidden md:opacity-0 md:pointer-events-none'
         }`}>
           
           {/* Sidebar Header & Tabs */}
@@ -1216,7 +1348,13 @@ export default function FormBuilder() {
               </h2>
 
               <button
-                onClick={() => setIsSidebarOpen(false)}
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setMobileActiveTab('editor');
+                  } else {
+                    setIsSidebarOpen(false);
+                  }
+                }}
                 className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
                 title="Fermer la barre latérale"
               >
@@ -1771,6 +1909,39 @@ export default function FormBuilder() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Mobile-Only Bottom Tab Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200/80 z-40 flex items-center justify-around px-4 shadow-lg pb-safe">
+        <button
+          onClick={() => setMobileActiveTab('editor')}
+          className={`flex flex-col items-center justify-center gap-1 h-full px-4 transition-all ${
+            mobileActiveTab === 'editor' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 font-medium'
+          }`}
+        >
+          <FileText className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Formulaire</span>
+        </button>
+
+        <button
+          onClick={() => setMobileActiveTab('settings')}
+          className={`flex flex-col items-center justify-center gap-1 h-full px-4 transition-all ${
+            mobileActiveTab === 'settings' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 font-medium'
+          }`}
+        >
+          <Settings className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Réglages</span>
+        </button>
+
+        <button
+          onClick={() => setMobileActiveTab('preview')}
+          className={`flex flex-col items-center justify-center gap-1 h-full px-4 transition-all ${
+            mobileActiveTab === 'preview' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 font-medium'
+          }`}
+        >
+          <Eye className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight">Aperçu</span>
+        </button>
+      </div>
 
       <SupabaseSettingsModal
         isOpen={isSupabaseModalOpen}

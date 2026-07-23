@@ -39,12 +39,13 @@ export default function PublicFormView() {
   const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
+    const company = questionnaire?.company_name || 'Exceller chez Pierre';
     if (questionnaire?.title) {
-      document.title = `Exceller chez Pierre + ${questionnaire.title}`;
+      document.title = `${company} - ${questionnaire.title}`;
     } else {
-      document.title = 'Exceller chez Pierre';
+      document.title = company;
     }
-  }, [questionnaire?.title]);
+  }, [questionnaire?.title, questionnaire?.company_name]);
 
   useEffect(() => {
     setRespondentId(generateShortId());
