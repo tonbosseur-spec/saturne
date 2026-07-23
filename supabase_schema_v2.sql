@@ -83,3 +83,29 @@ CREATE POLICY "Lecture publique des réponses via token de dashboard" ON respons
   USING (EXISTS (
     SELECT 1 FROM questionnaires WHERE id = responses.questionnaire_id AND dashboard_token IS NOT NULL
   ));
+
+-- ==========================================
+-- GESTION DES ADMINISTRATEURS (ACCÈS SÉCURISÉ)
+-- ==========================================
+
+-- 1. Table des administrateurs autorisés
+CREATE TABLE IF NOT EXISTS admins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Active la sécurité RLS pour la table admins
+ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
+
+-- Autorise uniquement la lecture publique pour la vérification de connexion
+CREATE POLICY "Lecture publique de vérification des admins" ON admins
+  FOR SELECT TO anon, authenticated
+  USING (true);
+
+-- 2. Insertion de l'administrateur principal
+INSERT INTO admins (email, password)
+VALUES ('pmbom@ecp.com', '4857')
+ON CONFLICT (email) DO NOTHING;
+

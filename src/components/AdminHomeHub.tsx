@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured, getSupabaseCredentials } from '../lib/supabase';
 import { Questionnaire } from '../types';
-import { FileText, Plus, Search, Trash2, Edit3, BarChart2, Check, Loader2, Link as LinkIcon, Share2, Users, LayoutGrid, BarChart3, Database, ShieldCheck, Settings, AlertCircle, RefreshCw, UploadCloud } from 'lucide-react';
+import { FileText, Plus, Search, Trash2, Edit3, BarChart2, Check, Loader2, Link as LinkIcon, Share2, Users, LayoutGrid, BarChart3, Database, ShieldCheck, Settings, AlertCircle, RefreshCw, UploadCloud, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import GlassCard from './GlassCard';
 import { getStoredQuestionnaires, deleteStoredQuestionnaire, saveStoredQuestionnaire, getStoredQuestionnaireData } from '../lib/storage';
@@ -287,6 +287,21 @@ export default function AdminHomeHub() {
                 <span>{isSyncing ? 'Synchronisation...' : 'Synchroniser tout'}</span>
               </motion.button>
             )}
+
+            {/* Logout Button */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                localStorage.removeItem('admin_logged_in');
+                localStorage.removeItem('admin_email');
+                navigate('/login');
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl font-bold text-xs sm:text-sm transition-all shadow-sm"
+              title="Se déconnecter de l'administration"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Déconnexion</span>
+            </motion.button>
 
             {/* View Toggle Tabs */}
             <div className="flex items-center bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200">

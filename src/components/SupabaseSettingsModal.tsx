@@ -229,6 +229,23 @@ CREATE POLICY "Allow public delete responses" ON responses FOR DELETE USING (tru
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;
+
+-- 8. Table des administrateurs et insertion initiale
+CREATE TABLE IF NOT EXISTS admins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read admins" ON admins;
+CREATE POLICY "Allow public read admins" ON admins FOR SELECT USING (true);
+
+INSERT INTO admins (email, password)
+VALUES ('pmbom@ecp.com', '4857')
+ON CONFLICT (email) DO NOTHING;
 `;
 
   const copySql = () => {
