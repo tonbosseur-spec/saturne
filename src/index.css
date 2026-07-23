@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  html, body {
+    min-height: 100dvh;
+    touch-action: manipulation;
+  }
+}
+
+.rich-text-area,
+.rich-text-content {
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    color: #0f172a;
+  }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-top: 0.5rem;
+    margin-bottom: 0.375rem;
+    color: #1e293b;
+  }
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin-top: 0.375rem;
+    margin-bottom: 0.25rem;
+    color: #334155;
+  }
+  p {
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+  }
+  ul {
+    list-style-type: disc;
+    padding-left: 1.25rem;
+    margin-top: 0.375rem;
+    margin-bottom: 0.375rem;
+  }
+  ol {
+    list-style-type: decimal;
+    padding-left: 1.25rem;
+    margin-top: 0.375rem;
+    margin-bottom: 0.375rem;
+  }
+  li {
+    margin-top: 0.125rem;
+    margin-bottom: 0.125rem;
+  }
+  strong, b {
+    font-weight: 700;
+  }
+  em, i {
+    font-style: italic;
+  }
+  u {
+    text-decoration: underline;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

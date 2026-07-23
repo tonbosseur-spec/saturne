@@ -1,0 +1,6 @@
+{
+  "name": "Supabase Schema: SaaS Questionnaire",
+  "description": "SQL scripts for Supabase tables and RLS policies for a personalized questionnaire SaaS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
