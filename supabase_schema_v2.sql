@@ -42,7 +42,8 @@ ALTER TABLE responses
 
 -- 4. Ajout du token de partage pour le Dashboard public (depuis l'étape précédente)
 ALTER TABLE questionnaires
-  ADD COLUMN dashboard_token UUID DEFAULT gen_random_uuid() UNIQUE;
+  ADD COLUMN dashboard_token UUID DEFAULT gen_random_uuid() UNIQUE,
+  ADD COLUMN custom_slug VARCHAR(255) UNIQUE;
 
 -- ==========================================
 -- SECURITE : ROW LEVEL SECURITY (RLS)

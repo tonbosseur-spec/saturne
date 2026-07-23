@@ -7,6 +7,7 @@ export interface Questionnaire {
   description: string;
   status: QuestionnaireStatus;
   dashboard_token?: string;
+  custom_slug?: string | null;
   created_at?: string;
   company_name?: string;
   responses?: { count: number }[];

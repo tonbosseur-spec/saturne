@@ -159,8 +159,8 @@ export default function AdminHomeHub() {
     }
   };
 
-  const copyFormLink = (id: string) => {
-    const link = `${window.location.origin}/f/${id}`;
+  const copyFormLink = (q: Questionnaire) => {
+    const link = `${window.location.origin}/f/${q.custom_slug || q.id}`;
     navigator.clipboard.writeText(link).then(() => {
       showToast('Lien du questionnaire copié !');
     });
@@ -470,7 +470,7 @@ export default function AdminHomeHub() {
                         
                         <motion.button 
                           whileTap={{ scale: 0.95 }}
-                          onClick={() => copyFormLink(q.id!)}
+                          onClick={() => copyFormLink(q)}
                           className="flex items-center justify-center px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 font-bold rounded-xl transition-all text-xs"
                           title="Copier le lien public du formulaire"
                         >

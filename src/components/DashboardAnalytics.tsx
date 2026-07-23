@@ -10,6 +10,11 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 
+const isValidUuid = (str: string): boolean => {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+};
+
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
 
 export default function DashboardAnalytics() {
@@ -133,18 +138,20 @@ export default function DashboardAnalytics() {
         if (token) {
           const res = await supabase
             .from('questionnaires')
-            .select('id, title, description, company_name, estimated_duration, dashboard_token')
+            .select('id, title, description, company_name, estimated_duration, dashboard_token, custom_slug')
             .eq('dashboard_token', token)
             .single();
           qData = res.data;
           qError = res.error;
           if (qData) targetId = qData.id;
         } else {
-          const res = await supabase
-            .from('questionnaires')
-            .select('id, title, description, company_name, estimated_duration, dashboard_token')
-            .eq('id', id)
-            .single();
+          let query = supabase.from('questionnaires').select('id, title, description, company_name, estimated_duration, dashboard_token, custom_slug');
+          if (isValidUuid(id || '')) {
+            query = query.or(`id.eq.${id},custom_slug.eq.${id}`);
+          } else {
+            query = query.eq('custom_slug', id || '');
+          }
+          const res = await query.maybeSingle();
           qData = res.data;
           qError = res.error;
         }

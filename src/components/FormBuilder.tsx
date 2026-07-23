@@ -9,7 +9,7 @@ import {
   ArrowLeft, Hash, Eye, EyeOff, PanelRightClose, PanelRightOpen, Copy,
   ExternalLink, Layers, Building2, HelpCircle, Share2, ArrowUp, ArrowDown,
   Sparkles, Sliders, ChevronDown, ChevronRight, X, Database, AlertCircle, Settings,
-  Clock
+  Clock, Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import DataExport from './DataExport';
@@ -1945,6 +1945,36 @@ export default function FormBuilder() {
 
                 <hr className="border-slate-100" />
 
+                {/* Personnalisation de l'URL (Slug) */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <Link2 className="w-3.5 h-3.5 text-blue-600" /> Personnaliser l'URL
+                  </h3>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Identifiant personnalisé (Slug)</label>
+                    <div className="flex rounded-xl bg-slate-50 border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
+                      <span className="bg-slate-100 text-slate-500 text-xs px-3 flex items-center border-r border-slate-200 font-mono">
+                        /f/
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="ex: mon-formulaire-1"
+                        value={questionnaire.custom_slug || ''}
+                        onChange={(e) => {
+                          const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+                          setQuestionnaire({ ...questionnaire, custom_slug: sanitized || null });
+                        }}
+                        className="w-full px-3 py-2 bg-transparent text-sm outline-none font-mono"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                      Lettres, chiffres, tirets et underscores autorisés. Laissez vide pour utiliser l'identifiant par défaut (UUID).
+                    </p>
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
                 {/* Share Links */}
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
@@ -1959,11 +1989,11 @@ export default function FormBuilder() {
                           <input
                             type="text"
                             readOnly
-                            value={`${window.location.origin}/f/${questionnaire.id}`}
+                            value={`${window.location.origin}/f/${questionnaire.custom_slug || questionnaire.id}`}
                             className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono text-slate-600 select-all"
                           />
                           <button
-                            onClick={() => copyToClipboard(`${window.location.origin}/f/${questionnaire.id}`, 'form')}
+                            onClick={() => copyToClipboard(`${window.location.origin}/f/${questionnaire.custom_slug || questionnaire.id}`, 'form')}
                             className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl border border-blue-200 transition-colors shrink-0"
                             title="Copier le lien public"
                           >

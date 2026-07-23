@@ -58,6 +58,7 @@ export async function syncQuestionnaireToSupabase(
       status: q.status || 'published',
       company_name: q.company_name || null,
       dashboard_token: dbToken,
+      custom_slug: q.custom_slug ? q.custom_slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-') : null,
       estimated_duration: q.estimated_duration !== undefined ? q.estimated_duration : null,
       updated_at: new Date().toISOString(),
     };
@@ -136,7 +137,8 @@ export async function syncQuestionnaireToSupabase(
 
     const finalId = qData?.id || qId;
     const finalToken = qData?.dashboard_token || dbToken;
-    const updatedQ: Questionnaire = { ...q, id: finalId, dashboard_token: finalToken };
+    const finalSlug = qData?.custom_slug || qRecord.custom_slug;
+    const updatedQ: Questionnaire = { ...q, id: finalId, dashboard_token: finalToken, custom_slug: finalSlug };
 
     // 2. Upsert Settings
     if (fullSettings) {

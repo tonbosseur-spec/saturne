@@ -98,7 +98,7 @@ export default function QuestionnaireDetail() {
     );
   }
 
-  const publicLink = `${window.location.origin}/f/${questionnaire.id}`;
+  const publicLink = `${window.location.origin}/f/${questionnaire.custom_slug || questionnaire.id}`;
   const analyticsSharedLink = questionnaire.dashboard_token 
     ? `${window.location.origin}/shared-dashboard/${questionnaire.dashboard_token}`
     : '';

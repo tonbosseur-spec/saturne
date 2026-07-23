@@ -14,6 +14,11 @@ import { RichTextRenderer } from './RichTextEditor';
 
 const generateShortId = () => Math.random().toString(36).substring(2, 10);
 
+const isValidUuid = (str: string): boolean => {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+};
+
 const extractLinks = (text: string | null | undefined): { url: string; label: string }[] => {
   if (!text) return [];
   const links: { url: string; label: string }[] = [];
@@ -92,11 +97,14 @@ export default function PublicFormView() {
       try {
         let loaded = false;
         try {
-          const { data: qData, error: qError } = await supabase
-            .from('questionnaires')
-            .select('*')
-            .or(`id.eq.${id},dashboard_token.eq.${id}`)
-            .maybeSingle();
+          let query = supabase.from('questionnaires').select('*');
+          if (isValidUuid(id)) {
+            query = query.or(`id.eq.${id},dashboard_token.eq.${id},custom_slug.eq.${id}`);
+          } else {
+            query = query.or(`dashboard_token.eq.${id},custom_slug.eq.${id}`);
+          }
+
+          const { data: qData, error: qError } = await query.maybeSingle();
 
           if (!qError && qData) {
             setQuestionnaire(qData);
@@ -949,22 +957,22 @@ export default function PublicFormView() {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white/70 backdrop-blur-2xl border border-white/60 shadow-2xl rounded-3xl p-8 sm:p-14 text-center max-w-2xl mx-auto space-y-6"
+              className="bg-white/70 backdrop-blur-2xl border border-white/60 shadow-2xl rounded-3xl p-5 sm:p-14 text-center max-w-2xl mx-auto space-y-6 w-full"
             >
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner border border-emerald-200"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner border border-emerald-200 shrink-0"
               >
-                <CheckCircle2 className="w-10 h-10" />
+                <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10" />
               </motion.div>
 
               <div className="space-y-4">
-                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight break-words">
                   {matchingCompletionSection ? matchingCompletionSection.title : "Merci pour vos réponses !"}
                 </h2>
-                <div className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed max-w-md mx-auto markdown-body">
+                <div className="text-slate-600 text-sm sm:text-lg font-medium leading-relaxed max-w-md mx-auto markdown-body break-words">
                   {matchingCompletionSection ? (
                     <RichTextRenderer content={matchingCompletionSection.description} />
                   ) : (
@@ -977,7 +985,7 @@ export default function PublicFormView() {
                 const detectedLinks = extractLinks(matchingCompletionSection.description);
                 if (detectedLinks.length === 0) return null;
                 return (
-                  <div className="flex flex-col gap-3 justify-center items-center py-2 max-w-md mx-auto">
+                  <div className="flex flex-col gap-2.5 justify-center items-center py-2 max-w-md mx-auto w-full">
                     {detectedLinks.map((link, index) => {
                       const displayLabel = link.label === "Ouvrir le lien" 
                         ? `${link.url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 30)}${link.url.replace(/^https?:\/\/(www\.)?/, '').length > 30 ? '...' : ''}`
@@ -990,7 +998,7 @@ export default function PublicFormView() {
                           rel="noopener noreferrer"
                           whileHover={{ scale: 1.02, y: -1 }}
                           whileTap={{ scale: 0.98 }}
-                          className="w-full inline-flex items-center justify-between gap-3 px-6 py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/60 rounded-2xl shadow-sm transition-all text-sm sm:text-base group"
+                          className="w-full inline-flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/60 rounded-2xl shadow-sm transition-all text-xs sm:text-base group"
                         >
                           <span className="truncate pr-2">{displayLabel}</span>
                           <ExternalLink className="w-4 h-4 flex-shrink-0 text-indigo-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -1001,15 +1009,15 @@ export default function PublicFormView() {
                 );
               })()}
 
-              <div className="inline-block bg-white/80 border border-slate-200/80 px-4 py-2 rounded-2xl text-xs font-mono font-bold text-slate-500 shadow-xs">
+              <div className="inline-block bg-white/80 border border-slate-200/80 px-4 py-2 rounded-2xl text-[10px] sm:text-xs font-mono font-bold text-slate-500 shadow-xs max-w-full break-all">
                 ID Répondant: {respondentId}
               </div>
 
-              <div>
+              <div className="pt-2">
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   onClick={handleReset}
-                  className="px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm sm:text-base rounded-full shadow-lg transition-all"
+                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-base rounded-full shadow-lg transition-all"
                 >
                   Soumettre une autre réponse
                 </motion.button>
