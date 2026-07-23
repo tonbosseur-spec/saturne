@@ -65,9 +65,23 @@ CREATE TABLE IF NOT EXISTS questionnaires (
   company_name TEXT,
   status TEXT DEFAULT 'published',
   dashboard_token TEXT UNIQUE,
+  estimated_duration INT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Assurer la présence de estimated_duration si la table existait déjà
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='questionnaires' AND column_name='estimated_duration'
+    ) THEN
+        ALTER TABLE questionnaires ADD COLUMN estimated_duration INT;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
 
 -- 2. Table de configuration visuelle des questionnaires
 CREATE TABLE IF NOT EXISTS questionnaire_settings (
@@ -102,9 +116,31 @@ CREATE TABLE IF NOT EXISTS sections (
   title TEXT,
   description TEXT,
   display_order INT DEFAULT 0,
+  conditional_logic JSONB,
+  is_completion_section BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Assurer la présence des nouvelles colonnes si la table existait déjà
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='sections' AND column_name='conditional_logic'
+    ) THEN
+        ALTER TABLE sections ADD COLUMN conditional_logic JSONB;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='sections' AND column_name='is_completion_section'
+    ) THEN
+        ALTER TABLE sections ADD COLUMN is_completion_section BOOLEAN DEFAULT FALSE;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
 
 -- 4. Table des questions
 CREATE TABLE IF NOT EXISTS questions (

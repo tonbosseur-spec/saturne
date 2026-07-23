@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Questionnaire } from '../types';
 import { ArrowLeft, Settings2, BarChart3, ExternalLink, Copy, Check, Loader2 } from 'lucide-react';
 import { getStoredQuestionnaireData } from '../lib/storage';
@@ -44,7 +44,7 @@ export default function QuestionnaireDetail() {
         console.warn('Supabase fetch failed in QuestionnaireDetail:', sbErr);
       }
 
-      if (!loaded) {
+      if (!loaded && !isSupabaseConfigured()) {
         const localData = getStoredQuestionnaireData(id);
         if (localData && localData.questionnaire) {
           setQuestionnaire(localData.questionnaire);
@@ -58,6 +58,15 @@ export default function QuestionnaireDetail() {
             dashboard_token: 'demo-token'
           });
         }
+      } else if (!loaded && id === 'demo-id') {
+        setQuestionnaire({
+          id: 'demo-id',
+          title: 'Questionnaire de Démo',
+          description: 'Un questionnaire de démonstration',
+          status: 'draft',
+          dashboard_token: 'demo-token'
+        });
+        loaded = true;
       }
     } catch (error) {
       console.error('Error fetching questionnaire:', error);

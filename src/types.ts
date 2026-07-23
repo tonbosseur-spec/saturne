@@ -10,6 +10,7 @@ export interface Questionnaire {
   created_at?: string;
   company_name?: string;
   responses?: { count: number }[];
+  estimated_duration?: number | null;
 }
 
 export interface QuestionnaireSettings {

@@ -4,7 +4,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Questionnaire, QuestionnaireSettings, Question, Section } from '../types';
 import {
   Loader2, ArrowRight, ArrowLeft, Check, Sparkles, Clock,
-  CheckCircle2, CornerDownLeft, ShieldCheck, Building2
+  CheckCircle2, CornerDownLeft, ShieldCheck, Building2, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import GlassCard from './GlassCard';
@@ -13,6 +13,38 @@ import { getStoredQuestionnaireData } from '../lib/storage';
 import { RichTextRenderer } from './RichTextEditor';
 
 const generateShortId = () => Math.random().toString(36).substring(2, 10);
+
+const extractLinks = (text: string | null | undefined): { url: string; label: string }[] => {
+  if (!text) return [];
+  const links: { url: string; label: string }[] = [];
+
+  // 1. Detect <a> tags
+  const aTagRegex = /<a\s+(?:[^>]*?\s+)?href=["']([^"']+)["'](?:[^>]*)?>([\s\S]*?)<\/a>/gi;
+  let match;
+  const processedUrls = new Set<string>();
+
+  while ((match = aTagRegex.exec(text)) !== null) {
+    const url = match[1].trim();
+    let label = match[2].replace(/<[^>]*>/g, '').trim();
+    if (!label) label = "Ouvrir le lien";
+    links.push({ url, label });
+    processedUrls.add(url);
+  }
+
+  // 2. Detect raw URLs (http or https)
+  const urlRegex = /https?:\/\/[^\s<"']+/gi;
+  const rawUrls = text.match(urlRegex) || [];
+  for (const url of rawUrls) {
+    const cleanUrl = url.trim().replace(/[.,;:!?]$/, ''); // Remove trailing punctuation
+    // Check if we haven't already captured this url as part of an <a> tag
+    if (![...processedUrls].some(existingUrl => existingUrl.includes(cleanUrl) || cleanUrl.includes(existingUrl))) {
+      links.push({ url: cleanUrl, label: "Ouvrir le lien" });
+      processedUrls.add(cleanUrl);
+    }
+  }
+
+  return links;
+};
 
 export default function PublicFormView() {
   const { id } = useParams<{ id: string }>();
@@ -79,32 +111,50 @@ export default function PublicFormView() {
               .maybeSingle();
             if (sData) setSettings(sData);
 
-            const { data: secData } = await supabase
-              .from('sections')
-              .select('*')
-              .eq('questionnaire_id', realId)
-              .order('display_order', { ascending: true });
-            setSections(
-              secData && secData.length > 0
-                ? secData.map((s: any) => ({
-                    ...s,
-                    is_completion_section: s.is_completion_section || s.conditional_logic?.is_completion_section || false
-                  }))
-                : [{ id: 'default', title: '', description: '', display_order: 0 }]
-            );
-
             const { data: qsData } = await supabase
               .from('questions')
               .select('*')
               .eq('questionnaire_id', realId)
               .order('display_order', { ascending: true });
-            setQuestions(qsData || []);
+            const loadedQuestions = qsData || [];
+            setQuestions(loadedQuestions);
+
+            const { data: secData } = await supabase
+              .from('sections')
+              .select('*')
+              .eq('questionnaire_id', realId)
+              .order('display_order', { ascending: true });
+
+            let loadedSections = secData || [];
+            if (loadedSections.length === 0 && loadedQuestions.length > 0) {
+              const uniqueSectionIds = Array.from(new Set(loadedQuestions.map((q: any) => q.section_id).filter(Boolean)));
+              if (uniqueSectionIds.length > 0) {
+                loadedSections = uniqueSectionIds.map((secId, idx) => ({
+                  id: secId as string,
+                  questionnaire_id: realId,
+                  title: `Section ${idx + 1}`,
+                  description: '',
+                  display_order: idx
+                }));
+              }
+            }
+
+            if (loadedSections.length === 0) {
+              loadedSections = [{ id: 'default', title: '', description: '', display_order: 0 }];
+            }
+
+            setSections(
+              loadedSections.map((s: any) => ({
+                ...s,
+                is_completion_section: s.is_completion_section || s.conditional_logic?.is_completion_section || false
+              }))
+            );
           }
         } catch (sbErr) {
           console.warn('Supabase fetch failed in PublicFormView:', sbErr);
         }
 
-        if (!loaded) {
+        if (!loaded && !isSupabaseConfigured()) {
           const localData = getStoredQuestionnaireData(id);
           if (localData && localData.questionnaire) {
             setQuestionnaire(localData.questionnaire);
@@ -250,12 +300,20 @@ export default function PublicFormView() {
 
   const currentSection = visibleSections[currentSectionIndex] || visibleSections[0];
   const currentQuestions = questions
-    .filter(q => q.section_id === currentSection?.id)
+    .filter(q => {
+      const sectionExists = sections.some(s => s.id === q.section_id);
+      if (sectionExists) {
+        return q.section_id === currentSection?.id;
+      }
+      return currentSection?.id === visibleSections[0]?.id;
+    })
     .filter(shouldShowQuestion);
 
   const isLastSection = visibleSections.length > 0 && currentSectionIndex === visibleSections.length - 1;
   const progressPercentage = visibleSections.length > 0 ? ((currentSectionIndex + 1) / visibleSections.length) * 100 : 100;
-  const estimatedMinutes = Math.max(1, Math.ceil(questions.length * 0.5));
+  const estimatedMinutes = questionnaire?.estimated_duration !== undefined && questionnaire?.estimated_duration !== null && questionnaire?.estimated_duration !== 0
+    ? questionnaire?.estimated_duration
+    : Math.max(1, Math.ceil(questions.length * 0.5));
 
   const validateCurrentSection = () => {
     if (!currentSection) return true;
@@ -914,6 +972,34 @@ export default function PublicFormView() {
                   )}
                 </div>
               </div>
+
+              {matchingCompletionSection && (() => {
+                const detectedLinks = extractLinks(matchingCompletionSection.description);
+                if (detectedLinks.length === 0) return null;
+                return (
+                  <div className="flex flex-col gap-3 justify-center items-center py-2 max-w-md mx-auto">
+                    {detectedLinks.map((link, index) => {
+                      const displayLabel = link.label === "Ouvrir le lien" 
+                        ? `${link.url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 30)}${link.url.replace(/^https?:\/\/(www\.)?/, '').length > 30 ? '...' : ''}`
+                        : link.label;
+                      return (
+                        <motion.a
+                          key={index}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          whileHover={{ scale: 1.02, y: -1 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="w-full inline-flex items-center justify-between gap-3 px-6 py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/60 rounded-2xl shadow-sm transition-all text-sm sm:text-base group"
+                        >
+                          <span className="truncate pr-2">{displayLabel}</span>
+                          <ExternalLink className="w-4 h-4 flex-shrink-0 text-indigo-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                        </motion.a>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               <div className="inline-block bg-white/80 border border-slate-200/80 px-4 py-2 rounded-2xl text-xs font-mono font-bold text-slate-500 shadow-xs">
                 ID Répondant: {respondentId}

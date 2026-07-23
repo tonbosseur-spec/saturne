@@ -8,7 +8,8 @@ import {
   Loader2, Check, Settings2, FileText, Type, CheckSquare, List, Download,
   ArrowLeft, Hash, Eye, EyeOff, PanelRightClose, PanelRightOpen, Copy,
   ExternalLink, Layers, Building2, HelpCircle, Share2, ArrowUp, ArrowDown,
-  Sparkles, Sliders, ChevronDown, ChevronRight, X, Database, AlertCircle, Settings
+  Sparkles, Sliders, ChevronDown, ChevronRight, X, Database, AlertCircle, Settings,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import DataExport from './DataExport';
@@ -41,6 +42,7 @@ export default function FormBuilder() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [hasLoadedData, setHasLoadedData] = useState(!id);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
 
@@ -122,12 +124,12 @@ export default function FormBuilder() {
     }
   }, [id]);
 
-  // Always keep local storage updated in real-time so public link is functional immediately
+  // Always keep local storage updated in real-time if Supabase is not configured
   useEffect(() => {
-    if (questionnaire && questionnaire.id) {
+    if (hasLoadedData && questionnaire && questionnaire.id && !isSupabaseConfigured()) {
       saveStoredQuestionnaire(questionnaire, settings, sections, questions);
     }
-  }, [questionnaire, settings, sections, questions]);
+  }, [hasLoadedData, questionnaire, settings, sections, questions]);
 
   const fetchQuestionnaireData = async () => {
     if (!id || id === 'demo-id') return;
@@ -152,40 +154,64 @@ export default function FormBuilder() {
             .single();
           if (sData) setSettings(sData);
 
-          const { data: secData } = await supabase
-            .from('sections')
-            .select('*')
-            .eq('questionnaire_id', id)
-            .order('display_order', { ascending: true });
-          if (secData && secData.length > 0) {
-            const mapped = secData.map((s: any) => ({
-              ...s,
-              is_completion_section: s.is_completion_section || s.conditional_logic?.is_completion_section || false
-            }));
-            if (!mapped.some((s: any) => s.is_completion_section)) {
-              mapped.push({
-                id: 'default-completion-sec',
-                title: 'Merci pour vos réponses !',
-                description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
-                display_order: mapped.length,
-                is_completion_section: true
-              });
-            }
-            setSections(mapped);
-          }
-
           const { data: qsData } = await supabase
             .from('questions')
             .select('*')
             .eq('questionnaire_id', id)
             .order('display_order', { ascending: true });
-          if (qsData && qsData.length > 0) setQuestions(qsData);
+          const loadedQuestions = qsData || [];
+          if (loadedQuestions.length > 0) setQuestions(loadedQuestions);
+
+          const { data: secData } = await supabase
+            .from('sections')
+            .select('*')
+            .eq('questionnaire_id', id)
+            .order('display_order', { ascending: true });
+
+          let loadedSections = secData || [];
+          if (loadedSections.length === 0 && loadedQuestions.length > 0) {
+            const uniqueSectionIds = Array.from(new Set(loadedQuestions.map((q: any) => q.section_id).filter(Boolean)));
+            if (uniqueSectionIds.length > 0) {
+              loadedSections = uniqueSectionIds.map((secId, idx) => ({
+                id: secId as string,
+                questionnaire_id: id,
+                title: `Section ${idx + 1}`,
+                description: '',
+                display_order: idx
+              }));
+            }
+          }
+
+          if (loadedSections.length === 0) {
+            loadedSections = [{
+              id: initialSectionId,
+              title: 'Section 1 : Informations Générales',
+              description: 'Merci de remplir vos informations ci-dessous.',
+              display_order: 0,
+            }];
+          }
+
+          const mapped = loadedSections.map((s: any) => ({
+            ...s,
+            is_completion_section: s.is_completion_section || s.conditional_logic?.is_completion_section || false
+          }));
+
+          if (!mapped.some((s: any) => s.is_completion_section)) {
+            mapped.push({
+              id: 'default-completion-sec',
+              title: 'Merci pour vos réponses !',
+              description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
+              display_order: mapped.length,
+              is_completion_section: true
+            });
+          }
+          setSections(mapped);
         }
       } catch (err) {
         console.warn('Supabase fetch failed, fallback to local storage:', err);
       }
 
-      if (!fetchedFromSupabase) {
+      if (!fetchedFromSupabase && !isSupabaseConfigured()) {
         const localData = getStoredQuestionnaireData(id);
         if (localData && localData.questionnaire) {
           setQuestionnaire(localData.questionnaire);
@@ -221,12 +247,15 @@ export default function FormBuilder() {
           }
           if (localData.questions && localData.questions.length > 0) setQuestions(localData.questions);
         }
+      } else if (!fetchedFromSupabase && isSupabaseConfigured()) {
+        setErrorMessage('Impossible de charger le questionnaire depuis Supabase.');
       }
     } catch (error) {
       console.error('Error fetching questionnaire data:', error);
       setErrorMessage('Erreur lors du chargement du questionnaire.');
     } finally {
       setIsLoadingData(false);
+      setHasLoadedData(true);
     }
   };
 
@@ -271,24 +300,28 @@ export default function FormBuilder() {
         updated_at: new Date().toISOString(),
       };
 
-      // 1. ALWAYS save to local storage immediately
-      const savedLocally = saveStoredQuestionnaire(updatedQuestionnaire, settings, sections, questions);
-      setQuestionnaire(savedLocally);
-
-      // 2. Sync to Supabase
-      const syncRes = await syncQuestionnaireToSupabase(savedLocally, settings, sections, questions);
-
-      if (syncRes.success) {
+      if (!isSupabaseConfigured()) {
+        const savedLocally = saveStoredQuestionnaire(updatedQuestionnaire, settings, sections, questions);
+        setQuestionnaire(savedLocally);
         setSaveStatus('success');
-        setErrorMessage('');
+        if (!id || id !== savedLocally.id) {
+          navigate(`/builder/${savedLocally.id}`, { replace: true });
+        }
       } else {
-        console.warn('Supabase sync warning:', syncRes.message);
-        setSaveStatus('error');
-        setErrorMessage(`Sauvegardé localement. ⚠️ Avertissement Supabase : ${syncRes.message}`);
-      }
+        const syncRes = await syncQuestionnaireToSupabase(updatedQuestionnaire, settings, sections, questions);
 
-      if (!id || id !== savedLocally.id) {
-        navigate(`/builder/${savedLocally.id}`, { replace: true });
+        if (syncRes.success) {
+          setQuestionnaire(updatedQuestionnaire);
+          setSaveStatus('success');
+          setErrorMessage('');
+          if (!id || id !== updatedQuestionnaire.id) {
+            navigate(`/builder/${updatedQuestionnaire.id}`, { replace: true });
+          }
+        } else {
+          console.warn('Supabase sync warning:', syncRes.message);
+          setSaveStatus('error');
+          setErrorMessage(`Erreur de sauvegarde Supabase : ${syncRes.message}`);
+        }
       }
     } catch (error: any) {
       console.error('Erreur lors de la sauvegarde:', error);
@@ -671,6 +704,29 @@ export default function FormBuilder() {
                     placeholder="Saisissez la description du questionnaire (mise en forme gras, titres, couleurs, listes acceptées)..."
                     minHeight="120px"
                   />
+                </div>
+
+                <div className="pt-2 border-t border-slate-100/60">
+                  <div className="max-w-xs">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-blue-600" />
+                      Temps de réponse estimé (Minutes)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder={`Calculé automatiquement (env. ${Math.max(1, Math.ceil(questions.length * 0.5))} min)`}
+                      value={questionnaire.estimated_duration || ''}
+                      onChange={(e) => {
+                        const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                        setQuestionnaire({ ...questionnaire, estimated_duration: val });
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-white transition-all"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                      Laissez vide pour calculer automatiquement en fonction du nombre de questions (30 sec par question).
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1842,6 +1898,32 @@ export default function FormBuilder() {
                     >
                       {questionnaire.status === 'published' ? 'Publié' : 'Brouillon'}
                     </button>
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                {/* Temps de réponse estimé */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-blue-600" /> Temps de réponse
+                  </h3>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Durée estimée (en minutes)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder={`Automatique (${Math.max(1, Math.ceil(questions.length * 0.5))} min)`}
+                      value={questionnaire.estimated_duration || ''}
+                      onChange={(e) => {
+                        const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                        setQuestionnaire({ ...questionnaire, estimated_duration: val });
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                      Laissez vide pour calculer automatiquement en fonction du nombre de questions (30 sec par question).
+                    </p>
                   </div>
                 </div>
 

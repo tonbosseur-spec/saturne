@@ -46,25 +46,20 @@ export default function AdminHomeHub() {
         }
       }
 
-      const localList = getStoredQuestionnaires();
-
-      // Merge local and Supabase questionnaires cleanly
-      const map = new Map<string, Questionnaire>();
-      for (const q of localList) {
-        if (q.id && q.id !== 'demo-id') map.set(q.id, q);
-      }
-      for (const q of sbList) {
-        if (q.id) {
-          const existing = map.get(q.id);
-          map.set(q.id, {
-            ...existing,
-            ...q,
-            responses: q.responses || existing?.responses || [{ count: 0 }],
-          });
+      let merged: Questionnaire[] = [];
+      if (supabaseActive) {
+        merged = sbList.map(q => ({
+          ...q,
+          responses: q.responses || [{ count: 0 }]
+        }));
+      } else {
+        const localList = getStoredQuestionnaires();
+        const map = new Map<string, Questionnaire>();
+        for (const q of localList) {
+          if (q.id && q.id !== 'demo-id') map.set(q.id, q);
         }
+        merged = Array.from(map.values());
       }
-
-      let merged = Array.from(map.values());
       
       // Seulement si aucune donnée ET que Supabase n'est PAS du tout configuré, afficher le demo-id
       if (merged.length === 0 && !supabaseActive) {
@@ -92,11 +87,10 @@ export default function AdminHomeHub() {
 
   const deleteQuestionnaire = async (id: string) => {
     try {
-      deleteStoredQuestionnaire(id);
-      try {
+      if (!isSupabaseConfigured()) {
+        deleteStoredQuestionnaire(id);
+      } else {
         await supabase.from('questionnaires').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase deletion skipped or failed:', e);
       }
       setQuestionnaires(prev => prev.filter(q => q.id !== id));
       setFormToDelete(null);
@@ -179,9 +173,11 @@ export default function AdminHomeHub() {
       token = Math.random().toString(36).substring(2, 15);
       const updatedQ = { ...q, dashboard_token: token };
       
-      saveStoredQuestionnaire(updatedQ);
+      if (!isSupabaseConfigured()) {
+        saveStoredQuestionnaire(updatedQ);
+      }
 
-      if (q.id !== 'demo-id') {
+      if (q.id !== 'demo-id' && isSupabaseConfigured()) {
         try {
           await supabase
             .from('questionnaires')

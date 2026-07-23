@@ -58,6 +58,7 @@ export async function syncQuestionnaireToSupabase(
       status: q.status || 'published',
       company_name: q.company_name || null,
       dashboard_token: dbToken,
+      estimated_duration: q.estimated_duration !== undefined ? q.estimated_duration : null,
       updated_at: new Date().toISOString(),
     };
 
@@ -172,10 +173,31 @@ export async function syncQuestionnaireToSupabase(
           title: s.title || '',
           description: s.description || '',
           conditional_logic,
+          is_completion_section: s.is_completion_section || false,
           display_order: index,
           updated_at: new Date().toISOString(),
         };
       });
+
+      // Delete sections that are no longer present
+      try {
+        const { data: existingSections } = await supabase
+          .from('sections')
+          .select('id')
+          .eq('questionnaire_id', finalId);
+
+        if (existingSections && existingSections.length > 0) {
+          const existingIds = existingSections.map(s => s.id);
+          const idsToKeep = sectionsToUpsert.map(s => s.id);
+          const idsToDelete = existingIds.filter(id => !idsToKeep.includes(id));
+          if (idsToDelete.length > 0) {
+            await supabase.from('sections').delete().in('id', idsToDelete);
+          }
+        }
+      } catch (err) {
+        console.warn('Error deleting orphaned sections from Supabase:', err);
+      }
+
       const { error: secError } = await supabase.from('sections').upsert(sectionsToUpsert);
       if (secError) {
         console.warn('Supabase sections upsert error:', secError);
@@ -207,6 +229,26 @@ export async function syncQuestionnaireToSupabase(
         has_other_option: Boolean(qItem.has_other_option),
         updated_at: new Date().toISOString(),
       }));
+
+      // Delete questions that are no longer present
+      try {
+        const { data: existingQuestions } = await supabase
+          .from('questions')
+          .select('id')
+          .eq('questionnaire_id', finalId);
+
+        if (existingQuestions && existingQuestions.length > 0) {
+          const existingIds = existingQuestions.map(q => q.id);
+          const idsToKeep = questionsToUpsert.map(q => q.id);
+          const idsToDelete = existingIds.filter(id => !idsToKeep.includes(id));
+          if (idsToDelete.length > 0) {
+            await supabase.from('questions').delete().in('id', idsToDelete);
+          }
+        }
+      } catch (err) {
+        console.warn('Error deleting orphaned questions from Supabase:', err);
+      }
+
       const { error: qstError } = await supabase.from('questions').upsert(questionsToUpsert);
       if (qstError) {
         console.warn('Supabase questions upsert error:', qstError);

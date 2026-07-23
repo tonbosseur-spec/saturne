@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Question } from '../types';
-import { Loader2, ArrowLeft, Users, FileText, BarChart3, TrendingUp, Share2, Check, Copy } from 'lucide-react';
+import { Loader2, Users, FileText, BarChart3, TrendingUp, Share2, Check, Copy, Filter, Search, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getStoredQuestionnaireData } from '../lib/storage';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -24,6 +24,66 @@ export default function DashboardAnalytics() {
 
   const [isCopied, setIsCopied] = useState(false);
   const [isUpdatingToken, setIsUpdatingToken] = useState(false);
+
+  // States for filtering questions
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[] | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+
+  const filterStorageKey = `dashboard-filters-${id || token || 'default'}`;
+
+  // Load saved filters on questions load
+  useEffect(() => {
+    if (questions.length > 0) {
+      const saved = localStorage.getItem(filterStorageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            // Keep only IDs that actually still exist in the current questions
+            const validIds = parsed.filter(qid => questions.some(q => q.id === qid));
+            setSelectedQuestionIds(validIds);
+            return;
+          }
+        } catch (e) {
+          console.error('Error loading dashboard filters:', e);
+        }
+      }
+      // Default to all selected
+      setSelectedQuestionIds(questions.map(q => q.id));
+    }
+  }, [questions, filterStorageKey]);
+
+  const activeSelectedIds = selectedQuestionIds !== null ? selectedQuestionIds : questions.map(q => q.id);
+
+  const handleToggleQuestion = (qid: string) => {
+    const isSelected = activeSelectedIds.includes(qid);
+    let updated;
+    if (isSelected) {
+      updated = activeSelectedIds.filter(item => item !== qid);
+    } else {
+      updated = [...activeSelectedIds, qid];
+    }
+    setSelectedQuestionIds(updated);
+    localStorage.setItem(filterStorageKey, JSON.stringify(updated));
+  };
+
+  const handleSelectAll = () => {
+    const updated = questions.map(q => q.id);
+    setSelectedQuestionIds(updated);
+    localStorage.setItem(filterStorageKey, JSON.stringify(updated));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedQuestionIds([]);
+    localStorage.setItem(filterStorageKey, JSON.stringify([]));
+  };
+
+  const filteredQuestions = questions.filter(q => {
+    const isSelected = activeSelectedIds.includes(q.id);
+    const matchesSearch = q.label.toLowerCase().includes(searchQuery.toLowerCase());
+    return isSelected && matchesSearch;
+  });
 
   useEffect(() => {
     const company = questionnaire?.company_name || 'Exceller chez Pierre';
@@ -73,7 +133,7 @@ export default function DashboardAnalytics() {
         if (token) {
           const res = await supabase
             .from('questionnaires')
-            .select('id, title, description, dashboard_token')
+            .select('id, title, description, company_name, estimated_duration, dashboard_token')
             .eq('dashboard_token', token)
             .single();
           qData = res.data;
@@ -82,7 +142,7 @@ export default function DashboardAnalytics() {
         } else {
           const res = await supabase
             .from('questionnaires')
-            .select('id, title, description, dashboard_token')
+            .select('id, title, description, company_name, estimated_duration, dashboard_token')
             .eq('id', id)
             .single();
           qData = res.data;
@@ -90,13 +150,15 @@ export default function DashboardAnalytics() {
         }
           
         if (qError || !qData) {
-          const localData = getStoredQuestionnaireData(id || token || '');
-          if (localData && localData.questionnaire) {
-            setQuestionnaire(localData.questionnaire);
-            setQuestions(localData.questions || []);
-            setResponses([]);
-            setLoading(false);
-            return;
+          if (!isSupabaseConfigured()) {
+            const localData = getStoredQuestionnaireData(id || token || '');
+            if (localData && localData.questionnaire) {
+              setQuestionnaire(localData.questionnaire);
+              setQuestions(localData.questions || []);
+              setResponses([]);
+              setLoading(false);
+              return;
+            }
           }
           if (qError) throw qError;
         }
@@ -392,11 +454,6 @@ export default function DashboardAnalytics() {
       <header className="bg-white border-b border-neutral-200 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            {!token && (
-              <Link to="/" className="p-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-            )}
             <div>
               <h1 className="text-xl font-bold tracking-tight">{questionnaire.title}</h1>
               <p className="text-sm text-neutral-500">Analytiques et résultats</p>
@@ -501,14 +558,118 @@ export default function DashboardAnalytics() {
 
         {/* Questions Analysis */}
         <div className="space-y-6">
-          <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-neutral-400" />
-            Analyse détaillée par question
-          </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-neutral-400" />
+              Analyse détaillée par question
+            </h2>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Search input */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Rechercher une question..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-4 py-2 text-sm bg-white border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-60 shadow-2xs transition-all"
+                />
+              </div>
+
+              {/* Filter toggle button */}
+              <button
+                onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-xl transition-all shadow-2xs ${
+                  isFilterPanelOpen || activeSelectedIds.length < questions.length
+                    ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                    : 'bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50'
+                }`}
+              >
+                <Filter className="w-4 h-4" />
+                <span>Filtrer ({activeSelectedIds.length}/{questions.length})</span>
+              </button>
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {isFilterPanelOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                    <div>
+                      <h3 className="font-semibold text-neutral-900 text-sm">Sélectionner les questions à afficher</h3>
+                      <p className="text-xs text-neutral-500">Décochez les données inutiles pour épurer le tableau de bord.</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={handleSelectAll}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2.5 py-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        Tout cocher
+                      </button>
+                      <button
+                        onClick={handleDeselectAll}
+                        className="text-xs text-neutral-500 hover:text-neutral-700 font-semibold px-2.5 py-1.5 hover:bg-neutral-50 rounded-lg transition-colors"
+                      >
+                        Tout décocher
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                    {questions.map((q, idx) => {
+                      const isChecked = activeSelectedIds.includes(q.id);
+                      return (
+                        <label
+                          key={q.id}
+                          className={`flex items-start gap-3 p-2.5 rounded-xl border text-left cursor-pointer transition-all hover:bg-neutral-50 ${
+                            isChecked 
+                              ? 'border-neutral-200/80 bg-neutral-50/20' 
+                              : 'border-transparent opacity-60'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleQuestion(q.id)}
+                            className="mt-1 h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div className="text-xs sm:text-sm">
+                            <span className="font-semibold text-neutral-400 mr-1.5">Q{idx + 1}</span>
+                            <span className="font-medium text-neutral-700">{q.label}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           
           {questions.length === 0 ? (
             <div className="p-8 text-center text-neutral-500 bg-white rounded-2xl border border-neutral-200 shadow-sm">
               Aucune question à analyser.
+            </div>
+          ) : filteredQuestions.length === 0 ? (
+            <div className="p-12 text-center text-neutral-500 bg-white rounded-2xl border border-neutral-200 shadow-sm flex flex-col items-center justify-center gap-3">
+              <EyeOff className="w-8 h-8 text-neutral-400" />
+              <div>
+                <p className="font-medium text-neutral-800">Aucune question ne correspond à vos filtres</p>
+                <p className="text-sm text-neutral-500 mt-1">Essayez d'ajuster votre recherche ou d'activer des questions dans le panneau de filtres.</p>
+              </div>
+              <button
+                onClick={handleSelectAll}
+                className="mt-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors text-sm shadow-xs"
+              >
+                Réinitialiser les filtres
+              </button>
             </div>
           ) : totalResponses === 0 ? (
             <div className="p-8 text-center text-neutral-500 bg-white rounded-2xl border border-neutral-200 shadow-sm">
@@ -516,7 +677,8 @@ export default function DashboardAnalytics() {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {questions.map((q, idx) => {
+              {filteredQuestions.map((q) => {
+                const originalIdx = questions.findIndex(originalQ => originalQ.id === q.id);
                 const analysis = processDataForQuestion(q);
                 
                 return (
@@ -524,7 +686,7 @@ export default function DashboardAnalytics() {
                     <div className="p-6 border-b border-neutral-100 flex-grow">
                       <div className="flex items-start gap-3 mb-4">
                         <span className="flex items-center justify-center w-6 h-6 rounded bg-neutral-100 text-xs font-bold text-neutral-500 shrink-0 mt-0.5">
-                          {idx + 1}
+                          {originalIdx + 1}
                         </span>
                         <h3 className="text-base font-semibold text-neutral-900 leading-snug">{q.label}</h3>
                       </div>
@@ -553,16 +715,23 @@ export default function DashboardAnalytics() {
                                     <YAxis 
                                       dataKey="name" 
                                       type="category" 
-                                      width={110} 
-                                      tick={{ fontSize: 12, fill: '#334155' }} 
+                                      width={150} 
+                                      tick={{ fontSize: 11, fill: '#334155' }} 
                                       axisLine={false} 
                                       tickLine={false}
-                                      tickFormatter={(val) => (typeof val === 'string' && val.length > 14 ? `${val.substring(0, 14)}...` : val)}
+                                      tickFormatter={(val) => (typeof val === 'string' && val.length > 22 ? `${val.substring(0, 20)}...` : val)}
                                     />
                                     <Tooltip 
                                       cursor={{ fill: '#f8fafc' }} 
                                       formatter={(value: number) => [value, 'Réponses']}
-                                      contentStyle={{ borderRadius: '12px', borderColor: '#e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                      contentStyle={{ 
+                                        borderRadius: '12px', 
+                                        borderColor: '#e2e8f0', 
+                                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                                        maxWidth: '280px',
+                                        whiteSpace: 'normal',
+                                        wordBreak: 'break-word'
+                                      }}
                                     />
                                     <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                                       {analysis.chartData.map((_, index) => (
@@ -585,9 +754,9 @@ export default function DashboardAnalytics() {
                                     const color = COLORS[index % COLORS.length];
 
                                     return (
-                                      <div key={item.name} className="flex items-center justify-between gap-3 text-xs sm:text-sm">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <span className="w-3 h-3 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: color }} />
+                                      <div key={item.name} className="flex items-start justify-between gap-3 text-xs sm:text-sm">
+                                        <div className="flex items-start gap-2.5 min-w-0">
+                                          <span className="w-3 h-3 rounded-full shrink-0 shadow-xs mt-1" style={{ backgroundColor: color }} />
                                           <span className="font-medium text-neutral-800 break-words leading-tight" title={item.name}>
                                             {item.name}
                                           </span>
