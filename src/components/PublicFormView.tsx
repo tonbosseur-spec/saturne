@@ -84,7 +84,14 @@ export default function PublicFormView() {
               .select('*')
               .eq('questionnaire_id', realId)
               .order('display_order', { ascending: true });
-            setSections(secData && secData.length > 0 ? secData : [{ id: 'default', title: '', description: '', display_order: 0 }]);
+            setSections(
+              secData && secData.length > 0
+                ? secData.map((s: any) => ({
+                    ...s,
+                    is_completion_section: s.is_completion_section || s.conditional_logic?.is_completion_section || false
+                  }))
+                : [{ id: 'default', title: '', description: '', display_order: 0 }]
+            );
 
             const { data: qsData } = await supabase
               .from('questions')
@@ -211,7 +218,28 @@ export default function PublicFormView() {
     return String(depAnswer ?? '') === String(equals_value);
   };
 
-  const visibleSections = sections.filter(shouldShowSection);
+  const visibleSections = sections
+    .filter(sec => !sec.is_completion_section)
+    .filter(shouldShowSection);
+
+  const getMatchingCompletionSection = () => {
+    const completionSections = sections.filter(s => s.is_completion_section);
+    if (completionSections.length === 0) return null;
+
+    // Find first conditional completion section that matches
+    const matchingCond = completionSections.find(sec => {
+      if (!sec.conditional_logic?.depends_on_code) return false;
+      return shouldShowSection(sec);
+    });
+
+    if (matchingCond) return matchingCond;
+
+    // Otherwise, find the first completion section with NO condition (default)
+    const defaultSec = completionSections.find(sec => !sec.conditional_logic?.depends_on_code);
+    return defaultSec || completionSections[0];
+  };
+
+  const matchingCompletionSection = getMatchingCompletionSection();
 
   // Auto-clamp currentSectionIndex if visible sections list changes
   useEffect(() => {
@@ -874,11 +902,17 @@ export default function PublicFormView() {
                 <CheckCircle2 className="w-10 h-10" />
               </motion.div>
 
-              <div className="space-y-2">
-                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Merci pour vos réponses !</h2>
-                <p className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed max-w-md mx-auto">
-                  Vos informations ont été enregistrées en toute sécurité.
-                </p>
+              <div className="space-y-4">
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                  {matchingCompletionSection ? matchingCompletionSection.title : "Merci pour vos réponses !"}
+                </h2>
+                <div className="text-slate-600 text-base sm:text-lg font-medium leading-relaxed max-w-md mx-auto markdown-body">
+                  {matchingCompletionSection ? (
+                    <RichTextRenderer content={matchingCompletionSection.description} />
+                  ) : (
+                    <p>Vos informations ont été enregistrées en toute sécurité.</p>
+                  )}
+                </div>
               </div>
 
               <div className="inline-block bg-white/80 border border-slate-200/80 px-4 py-2 rounded-2xl text-xs font-mono font-bold text-slate-500 shadow-xs">

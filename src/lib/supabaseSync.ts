@@ -160,14 +160,22 @@ export async function syncQuestionnaireToSupabase(
 
     // 3. Upsert Sections
     if (fullSections && fullSections.length > 0) {
-      const sectionsToUpsert = fullSections.map((s, index) => ({
-        id: s.id || `sec_${index}_${crypto.randomUUID().substring(0, 8)}`,
-        questionnaire_id: finalId,
-        title: s.title || '',
-        description: s.description || '',
-        display_order: index,
-        updated_at: new Date().toISOString(),
-      }));
+      const sectionsToUpsert = fullSections.map((s, index) => {
+        const condLogic = s.conditional_logic || {};
+        const conditional_logic = {
+          ...condLogic,
+          is_completion_section: s.is_completion_section || (condLogic as any).is_completion_section || false
+        };
+        return {
+          id: s.id || `sec_${index}_${crypto.randomUUID().substring(0, 8)}`,
+          questionnaire_id: finalId,
+          title: s.title || '',
+          description: s.description || '',
+          conditional_logic,
+          display_order: index,
+          updated_at: new Date().toISOString(),
+        };
+      });
       const { error: secError } = await supabase.from('sections').upsert(sectionsToUpsert);
       if (secError) {
         console.warn('Supabase sections upsert error:', secError);

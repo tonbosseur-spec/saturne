@@ -30,6 +30,7 @@ export interface Section {
     depends_on_code?: string;
     equals_value?: string;
   };
+  is_completion_section?: boolean;
 }
 
 export interface QuestionOption {

@@ -78,6 +78,13 @@ export default function FormBuilder() {
       title: 'Section 1 : Informations Générales',
       description: 'Merci de remplir vos informations ci-dessous.',
       display_order: 0,
+    },
+    {
+      id: 'default-completion-sec',
+      title: 'Merci pour vos réponses !',
+      description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
+      display_order: 1,
+      is_completion_section: true
     }
   ]);
 
@@ -150,7 +157,22 @@ export default function FormBuilder() {
             .select('*')
             .eq('questionnaire_id', id)
             .order('display_order', { ascending: true });
-          if (secData && secData.length > 0) setSections(secData);
+          if (secData && secData.length > 0) {
+            const mapped = secData.map((s: any) => ({
+              ...s,
+              is_completion_section: s.is_completion_section || s.conditional_logic?.is_completion_section || false
+            }));
+            if (!mapped.some((s: any) => s.is_completion_section)) {
+              mapped.push({
+                id: 'default-completion-sec',
+                title: 'Merci pour vos réponses !',
+                description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
+                display_order: mapped.length,
+                is_completion_section: true
+              });
+            }
+            setSections(mapped);
+          }
 
           const { data: qsData } = await supabase
             .from('questions')
@@ -168,7 +190,35 @@ export default function FormBuilder() {
         if (localData && localData.questionnaire) {
           setQuestionnaire(localData.questionnaire);
           if (localData.settings) setSettings(localData.settings);
-          if (localData.sections && localData.sections.length > 0) setSections(localData.sections);
+          if (localData.sections && localData.sections.length > 0) {
+            const loadedSecs = [...localData.sections];
+            if (!loadedSecs.some(s => s.is_completion_section)) {
+              loadedSecs.push({
+                id: 'default-completion-sec',
+                title: 'Merci pour vos réponses !',
+                description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
+                display_order: loadedSecs.length,
+                is_completion_section: true
+              });
+            }
+            setSections(loadedSecs);
+          } else {
+            setSections([
+              {
+                id: initialSectionId,
+                title: 'Section 1 : Informations Générales',
+                description: 'Merci de remplir vos informations ci-dessous.',
+                display_order: 0,
+              },
+              {
+                id: 'default-completion-sec',
+                title: 'Merci pour vos réponses !',
+                description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
+                display_order: 1,
+                is_completion_section: true
+              }
+            ]);
+          }
           if (localData.questions && localData.questions.length > 0) setQuestions(localData.questions);
         }
       }
@@ -627,7 +677,7 @@ export default function FormBuilder() {
 
             {/* SECTIONS & QUESTIONS LIST */}
             <div className="space-y-10">
-              {sections.map((section, sIndex) => {
+              {sections.filter(s => !s.is_completion_section).map((section, sIndex) => {
                 const sectionQuestions = questions
                   .filter(q => q.section_id === section.id)
                   .sort((a, b) => a.display_order - b.display_order);
@@ -1188,6 +1238,190 @@ export default function FormBuilder() {
               })}
             </div>
 
+            {/* FIN DE QUESTIONNAIRE (COMPLETION SECTIONS) */}
+            <div className="space-y-6 bg-slate-100/90 p-5 sm:p-7 rounded-3xl border border-slate-200/80 relative transition-all shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-300/60">
+                <div className="space-y-1">
+                  <span className="text-sm font-black text-slate-800 tracking-tight flex items-center gap-2">
+                    🏁 Messages de Fin de Questionnaire (Écran de remerciement)
+                  </span>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Définissez les messages affichés après la validation. Le premier message dont les conditions sont remplies sera affiché.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newId = crypto.randomUUID();
+                    setSections([...sections, {
+                      id: newId,
+                      title: 'Merci pour vos réponses !',
+                      description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
+                      display_order: sections.length,
+                      is_completion_section: true,
+                      conditional_logic: {
+                        depends_on_code: '',
+                        equals_value: ''
+                      }
+                    }]);
+                  }}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/60 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 self-start sm:self-auto"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Ajouter un message de fin conditionnel
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {sections.filter(s => s.is_completion_section).map((section, complIdx) => {
+                  const isDefault = complIdx === 0 && !section.conditional_logic?.depends_on_code;
+                  return (
+                    <div
+                      key={section.id}
+                      className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-extrabold px-2.5 py-1 rounded-lg ${isDefault ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+                            {isDefault ? 'Message de Fin par Défaut' : `Message de Fin Conditionnel #${complIdx}`}
+                          </span>
+                        </div>
+                        {!isDefault && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSections(sections.filter(s => s.id !== section.id));
+                            }}
+                            className="text-xs font-bold text-red-600 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Supprimer
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-xs font-bold text-slate-600 block mb-1">
+                            Titre principal du message de fin
+                          </label>
+                          <input
+                            type="text"
+                            value={section.title}
+                            onChange={(e) => updateSection(section.id, { title: e.target.value })}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 bg-slate-50 outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            placeholder="ex: Merci pour vos réponses !"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold text-slate-600 block mb-1">
+                            Description ou message personnalisé (Rich Text)
+                          </label>
+                          <RichTextEditor
+                            value={section.description || ''}
+                            onChange={(html) => updateSection(section.id, { description: html })}
+                            placeholder="Saisissez votre message de remerciement, instructions de fin..."
+                            minHeight="100px"
+                          />
+                        </div>
+                      </div>
+
+                      {/* CONDITIONAL DISPLAY LOGIC FOR COMPLETION MESSAGE */}
+                      <div className="pt-3 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-600">
+                            Condition d'affichage de ce message :
+                          </span>
+                          {section.conditional_logic?.depends_on_code && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateSection(section.id, { conditional_logic: undefined });
+                              }}
+                              className="text-xs text-red-600 font-bold hover:underline"
+                            >
+                              Retirer la condition
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3 mt-2">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 block mb-1">
+                              Question déclencheuse
+                            </label>
+                            <select
+                              value={section.conditional_logic?.depends_on_code || ''}
+                              onChange={(e) => updateSection(section.id, {
+                                conditional_logic: {
+                                  depends_on_code: e.target.value,
+                                  equals_value: section.conditional_logic?.equals_value || ''
+                                }
+                              })}
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-blue-500 bg-slate-50 text-slate-800"
+                            >
+                              <option value="">-- Toujours afficher (aucune condition) --</option>
+                              {questions
+                                .map(q => (
+                                  <option key={q.id} value={q.question_code || q.id}>
+                                    {q.question_code ? `[Code: ${q.question_code}] ` : ''}{q.label.length > 50 ? q.label.substring(0, 50) + '...' : q.label}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-500 block mb-1">
+                              Est égale à la valeur :
+                            </label>
+                            {(() => {
+                              const selectedCode = section.conditional_logic?.depends_on_code;
+                              const depQ = questions.find(q => q.question_code === selectedCode || q.id === selectedCode);
+                              if (depQ && depQ.options && depQ.options.length > 0) {
+                                return (
+                                  <select
+                                    value={section.conditional_logic?.equals_value || ''}
+                                    onChange={(e) => updateSection(section.id, {
+                                      conditional_logic: {
+                                        depends_on_code: section.conditional_logic?.depends_on_code || '',
+                                        equals_value: e.target.value
+                                      }
+                                    })}
+                                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-blue-500 bg-slate-50 text-slate-800"
+                                  >
+                                    <option value="">-- Choisir la valeur option --</option>
+                                    {depQ.options.map(opt => (
+                                      <option key={opt.id} value={opt.label}>{opt.label}</option>
+                                    ))}
+                                  </select>
+                                );
+                              }
+                              return (
+                                <input
+                                  type="text"
+                                  placeholder="ex: Oui"
+                                  value={section.conditional_logic?.equals_value || ''}
+                                  onChange={(e) => updateSection(section.id, {
+                                    conditional_logic: {
+                                      depends_on_code: section.conditional_logic?.depends_on_code || '',
+                                      equals_value: e.target.value
+                                    }
+                                  })}
+                                  className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50 text-slate-800"
+                                />
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Button "＋ Nouvelle Section" at Canvas Bottom */}
             <motion.button
               whileTap={{ scale: 0.98 }}
@@ -1237,7 +1471,7 @@ export default function FormBuilder() {
 
               {/* Form Questions List */}
               <div className="p-5 space-y-8">
-                {sections.map((section, sIdx) => {
+                {sections.filter(s => !s.is_completion_section).map((section, sIdx) => {
                   const secQs = questions
                     .filter(q => q.section_id === section.id)
                     .sort((a, b) => a.display_order - b.display_order);
@@ -1698,7 +1932,7 @@ export default function FormBuilder() {
                 </div>
 
                 <div className="space-y-4">
-                  {sections.map((sec, sIdx) => {
+                  {sections.filter(s => !s.is_completion_section).map((sec, sIdx) => {
                     const secQs = questions.filter(q => q.section_id === sec.id);
 
                     return (
@@ -1823,7 +2057,7 @@ export default function FormBuilder() {
 
                   {/* Form Questions List */}
                   <div className="p-6 sm:p-10 space-y-10">
-                    {sections.map((section) => {
+                    {sections.filter(s => !s.is_completion_section).map((section) => {
                       const secQs = questions
                         .filter(q => q.section_id === section.id)
                         .sort((a, b) => a.display_order - b.display_order);
