@@ -112,10 +112,27 @@ export default function DashboardAnalytics() {
         setQuestions(qsData || []);
 
         // 3. Fetch Responses
-        const { data: respData, error: respError } = await supabase
+        let respData = null;
+        let respError = null;
+
+        const r1 = await supabase
           .from('responses')
-          .select('payload')
+          .select('*')
           .eq('questionnaire_id', targetId);
+
+        if (!r1.error) {
+          respData = r1.data;
+        } else {
+          const r2 = await supabase
+            .from('response')
+            .select('*')
+            .eq('questionnaire_id', targetId);
+          if (!r2.error) {
+            respData = r2.data;
+          } else {
+            respError = r1.error || r2.error;
+          }
+        }
 
         if (respError) throw respError;
         setResponses(respData || []);
@@ -217,8 +234,85 @@ export default function DashboardAnalytics() {
 
   const totalResponses = responses.length;
 
+  const calculateNumericStats = (values: number[]) => {
+    if (values.length === 0) return null;
+
+    const sorted = [...values].sort((a, b) => a - b);
+    const count = sorted.length;
+    const min = sorted[0];
+    const max = sorted[count - 1];
+    const sum = sorted.reduce((acc, v) => acc + v, 0);
+    const mean = sum / count;
+
+    let median = 0;
+    if (count % 2 === 1) {
+      median = sorted[Math.floor(count / 2)];
+    } else {
+      const mid1 = sorted[count / 2 - 1];
+      const mid2 = sorted[count / 2];
+      median = (mid1 + mid2) / 2;
+    }
+
+    const variance = sorted.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / count;
+    const stdDev = Math.sqrt(variance);
+
+    let histogramData: { bin: string; count: number }[] = [];
+    const uniqueVals = Array.from(new Set(sorted));
+
+    if (uniqueVals.length <= 8) {
+      const countsMap: Record<number, number> = {};
+      sorted.forEach(v => { countsMap[v] = (countsMap[v] || 0) + 1; });
+      histogramData = Object.entries(countsMap).map(([val, cnt]) => ({
+        bin: String(val),
+        count: cnt,
+      }));
+    } else {
+      const binCount = Math.min(7, Math.max(4, Math.floor(Math.sqrt(count))));
+      const range = max - min;
+      const step = range / binCount;
+
+      const bins = Array.from({ length: binCount }, (_, i) => {
+        const start = min + i * step;
+        const end = i === binCount - 1 ? max : start + step;
+        return {
+          start,
+          end,
+          label: `${Number(start.toFixed(1))} à ${Number(end.toFixed(1))}`,
+          count: 0
+        };
+      });
+
+      sorted.forEach(v => {
+        let placed = false;
+        for (let i = 0; i < bins.length; i++) {
+          if (i === bins.length - 1 ? (v >= bins[i].start && v <= bins[i].end) : (v >= bins[i].start && v < bins[i].end)) {
+            bins[i].count++;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) bins[bins.length - 1].count++;
+      });
+
+      histogramData = bins.map(b => ({
+        bin: b.label,
+        count: b.count
+      }));
+    }
+
+    return {
+      min: Number(min.toFixed(2)),
+      max: Number(max.toFixed(2)),
+      mean: Number(mean.toFixed(2)),
+      median: Number(median.toFixed(2)),
+      stdDev: Number(stdDev.toFixed(2)),
+      histogramData,
+      count
+    };
+  };
+
   const processDataForQuestion = (q: Question) => {
-    const answers = responses.map(r => r.payload[q.id]).filter(a => a !== undefined && a !== null && a !== '');
+    const answers = responses.map(r => r.payload[q.id]).filter(a => a !== undefined && a !== null && String(a).trim() !== '');
     const answeredCount = answers.length;
     
     if (answeredCount === 0) {
@@ -244,34 +338,36 @@ export default function DashboardAnalytics() {
         .sort((a, b) => b.value - a.value);
 
       const topAnswer = chartData[0];
-      const percentage = Math.round((topAnswer.value / ((q.type === 'checkbox' || q.type === 'multiple_choice' || q.type === 'select') ? totalResponses : answeredCount)) * 100);
+      const percentage = Math.round((topAnswer.value / ((q.type === 'checkbox') ? totalResponses : answeredCount)) * 100);
       const summary = `${percentage}% des répondants ont choisi "${topAnswer.name}".`;
 
-      return { type: q.type, chartData, summary, answeredCount };
+      return { type: 'categorical', chartData, summary, answeredCount };
     }
 
-    if (q.type === 'text') {
-      // Tente de vérifier s'il s'agit principalement de données numériques
-      const numericAnswers = answers.map(a => parseFloat(a)).filter(n => !isNaN(n));
-      if (numericAnswers.length > 0 && numericAnswers.length >= answers.length * 0.5) {
-        // Considéré comme numérique si au moins 50% des réponses sont des nombres
-        const sum = numericAnswers.reduce((acc, val) => acc + val, 0);
-        const avg = (sum / numericAnswers.length).toFixed(1);
+    const numValues = answers.map(a => parseFloat(a)).filter(n => !isNaN(n));
+    const isNumericType = q.type === 'number';
+    const isMostlyNumericText = q.type === 'text' && numValues.length > 0 && numValues.length >= answers.length * 0.7;
+
+    if (isNumericType || isMostlyNumericText) {
+      if (numValues.length > 0) {
+        const stats = calculateNumericStats(numValues);
         return { 
           type: 'numeric', 
-          summary: `Moyenne : ${avg} (basé sur ${numericAnswers.length} réponses numériques).`,
-          answeredCount
-        };
-      } else {
-        return { 
-          type: 'text_only', 
-          summary: `${answeredCount} réponses textuelles collectées.`,
+          stats,
+          summary: `Données numériques : Moyenne de ${stats?.mean} (min: ${stats?.min}, max: ${stats?.max})`,
           answeredCount
         };
       }
     }
 
-    return { type: 'unknown' };
+    // Default for short text, date, email, etc.
+    const textAnswers = answers.map(a => Array.isArray(a) ? a.join(', ') : String(a));
+    return { 
+      type: 'text_short', 
+      answers: textAnswers,
+      summary: `${textAnswers.length} réponse(s) textuelle(s) collectée(s)`,
+      answeredCount
+    };
   };
 
   return (
@@ -441,7 +537,7 @@ export default function DashboardAnalytics() {
                             <p className="text-xs text-blue-600/70 mt-1">{analysis.answeredCount} réponse(s)</p>
                           </div>
 
-                          {(analysis.type === 'multiple_choice' || analysis.type === 'select' || analysis.type === 'checkbox') && analysis.chartData && (
+                          {analysis.type === 'categorical' && analysis.chartData && (
                             <div className="space-y-4">
                               {/* Graphique à barres horizontales */}
                               <div className="h-56 w-full">
@@ -476,14 +572,14 @@ export default function DashboardAnalytics() {
                                 </ResponsiveContainer>
                               </div>
 
-                              {/* Légende détaillée lisible sur mobile */}
+                              {/* Légende détaillée */}
                               <div className="bg-neutral-50/80 p-3.5 rounded-xl border border-neutral-200/80 space-y-2">
                                 <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
                                   Légende et détail des choix
                                 </p>
                                 <div className="space-y-2">
                                   {analysis.chartData.map((item, index) => {
-                                    const total = analysis.type === 'checkbox' ? (totalResponses || 1) : (analysis.answeredCount || totalResponses || 1);
+                                    const total = analysis.answeredCount || totalResponses || 1;
                                     const pct = Math.round((item.value / total) * 100);
                                     const color = COLORS[index % COLORS.length];
 
@@ -509,13 +605,73 @@ export default function DashboardAnalytics() {
                             </div>
                           )}
 
-                          {(analysis.type === 'numeric' || analysis.type === 'text_only') && (
-                            <div className="flex items-center justify-center h-40 bg-neutral-50 rounded-xl border border-neutral-100 border-dashed">
-                              <p className="text-sm text-neutral-400">
-                                {analysis.type === 'numeric' 
-                                  ? "Aperçu statistique généré au-dessus."
-                                  : "Les réponses textuelles nécessitent une lecture manuelle (voir l'export)."}
+                          {analysis.type === 'numeric' && analysis.stats && (
+                            <div className="space-y-5">
+                              {/* Metrics bar */}
+                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-center">
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block mb-0.5">Moyenne</span>
+                                  <span className="text-base font-black text-slate-800">{analysis.stats.mean}</span>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-center">
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block mb-0.5">Médiane</span>
+                                  <span className="text-base font-black text-slate-800">{analysis.stats.median}</span>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-center">
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block mb-0.5">Min</span>
+                                  <span className="text-base font-black text-slate-800">{analysis.stats.min}</span>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-center">
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block mb-0.5">Max</span>
+                                  <span className="text-base font-black text-slate-800">{analysis.stats.max}</span>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-center col-span-2 sm:col-span-1">
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block mb-0.5">Écart-type</span>
+                                  <span className="text-base font-black text-slate-800">{analysis.stats.stdDev}</span>
+                                </div>
+                              </div>
+
+                              {/* Histogram */}
+                              <div>
+                                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Histogramme de distribution</p>
+                                <div className="h-48 w-full bg-slate-50/50 p-2 rounded-2xl border border-slate-200/80">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={analysis.stats.histogramData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                      <XAxis dataKey="bin" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                      <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                      <Tooltip 
+                                        cursor={{ fill: '#f1f5f9' }} 
+                                        formatter={(value: number) => [value, 'Fréquence']}
+                                        labelFormatter={(label) => `Tranche / Valeur : ${label}`}
+                                        contentStyle={{ borderRadius: '12px', borderColor: '#cbd5e1', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                      />
+                                      <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {analysis.type === 'text_short' && analysis.answers && (
+                            <div className="space-y-3">
+                              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                Liste des réponses ({analysis.answers.length})
                               </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                                {analysis.answers.map((ans: string, idxAns: number) => (
+                                  <div
+                                    key={idxAns}
+                                    className="bg-slate-100/90 hover:bg-slate-200/70 border border-slate-200/90 text-slate-800 p-3 rounded-2xl rounded-tl-xs shadow-2xs transition-all flex items-start gap-2"
+                                  >
+                                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />
+                                    <p className="text-xs sm:text-sm font-medium leading-relaxed line-clamp-3 break-words">
+                                      {ans}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </>

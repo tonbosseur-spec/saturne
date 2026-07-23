@@ -16,6 +16,61 @@ export default function DataExport({ questionnaireId, questions, dashboardToken 
   const [isExporting, setIsExporting] = useState<'csv' | 'xlsx' | null>(null);
   const [message, setMessage] = useState('');
 
+  const fetchRawResponses = async (qId: string) => {
+    let data: any[] | null = null;
+    let error: any = null;
+
+    // 1. Try table 'responses' with select('*')
+    const res1 = await supabase
+      .from('responses')
+      .select('*')
+      .eq('questionnaire_id', qId);
+
+    if (!res1.error && res1.data) {
+      data = res1.data;
+    } else {
+      // 2. Try table 'response' if 'responses' failed
+      const res2 = await supabase
+        .from('response')
+        .select('*')
+        .eq('questionnaire_id', qId);
+
+      if (!res2.error && res2.data) {
+        data = res2.data;
+      } else {
+        error = res1.error || res2.error;
+      }
+    }
+
+    if (error) {
+      console.error('Supabase fetch error for responses:', error);
+      throw new Error(error.message || 'Erreur lors de la récupération des réponses Supabase.');
+    }
+
+    if (!data || data.length === 0) {
+      throw new Error('Aucune réponse à exporter pour le moment.');
+    }
+
+    const getRowDateStr = (row: any) => {
+      const ts = row.created_at || row.submitted_at || row.created || row.created_time || row.date || row.timestamp;
+      if (!ts) return new Date().toLocaleString();
+      const d = new Date(ts);
+      return isNaN(d.getTime()) ? new Date().toLocaleString() : d.toLocaleString();
+    };
+
+    const getRowDate = (row: any) => {
+      const ts = row.created_at || row.submitted_at || row.created || row.created_time || row.date || row.timestamp;
+      if (!ts) return new Date();
+      const d = new Date(ts);
+      return isNaN(d.getTime()) ? new Date() : d;
+    };
+
+    // Sort descending by date
+    data.sort((a, b) => getRowDate(b).getTime() - getRowDate(a).getTime());
+
+    return { data, getRowDateStr };
+  };
+
   const fetchAndFormatDataCSV = async () => {
     if (!questionnaireId) {
       throw new Error("Veuillez sauvegarder le questionnaire avant d'exporter.");
@@ -23,7 +78,7 @@ export default function DataExport({ questionnaireId, questions, dashboardToken 
 
     // Fallback pour la démo sans vraie base de données
     if (questionnaireId === 'demo-id' && !isSupabaseConfigured()) {
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      await new Promise(resolve => setTimeout(resolve, 800));
       return [
         { 
           "Date de soumission": new Date().toLocaleString(), 
@@ -40,31 +95,22 @@ export default function DataExport({ questionnaireId, questions, dashboardToken 
       ];
     }
 
-    const { data, error } = await supabase
-      .from('responses')
-      .select('created_at, payload')
-      .eq('questionnaire_id', questionnaireId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    if (!data || data.length === 0) {
-      throw new Error('Aucune réponse à exporter pour le moment.');
-    }
+    const { data, getRowDateStr } = await fetchRawResponses(questionnaireId);
 
     // Aplatissement des données (Flattening)
     return data.map(row => {
+      const payload = row.payload || {};
       const formattedRow: Record<string, any> = {
-        'Date de soumission': new Date(row.created_at).toLocaleString()
+        'Date de soumission': getRowDateStr(row)
       };
 
       questions.forEach(q => {
-        let answer = row.payload[q.id];
+        let answer = payload[q.id];
         // Transformation des tableaux (ex: cases à cocher) en chaîne de caractères
         if (Array.isArray(answer)) {
           answer = answer.join(', ');
         }
-        formattedRow[q.label] = answer || '';
+        formattedRow[q.label || q.question_code || q.id] = answer !== undefined && answer !== null ? answer : '';
       });
 
       return formattedRow;
@@ -105,9 +151,11 @@ export default function DataExport({ questionnaireId, questions, dashboardToken 
       }
 
       let rawData: any[] = [];
+      let getDateStr = (row: any) => new Date().toLocaleString();
+
       // Fallback pour la démo sans vraie base de données
       if (questionnaireId === 'demo-id' && !isSupabaseConfigured()) {
-        await new Promise(resolve => setTimeout(resolve, 1200));
+        await new Promise(resolve => setTimeout(resolve, 800));
         rawData = [
           {
             respondent_id: 'R-Demo1',
@@ -128,29 +176,23 @@ export default function DataExport({ questionnaireId, questions, dashboardToken 
             }
           }
         ];
+        getDateStr = (row: any) => new Date(row.created_at).toLocaleString();
       } else {
-        const { data, error } = await supabase
-          .from('responses')
-          .select('respondent_id, created_at, payload')
-          .eq('questionnaire_id', questionnaireId)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        if (!data || data.length === 0) {
-          throw new Error('Aucune réponse à exporter pour le moment.');
-        }
-        rawData = data;
+        const res = await fetchRawResponses(questionnaireId);
+        rawData = res.data;
+        getDateStr = res.getRowDateStr;
       }
 
       // Feuille 1: Données
       const dataSheetData = rawData.map(row => {
+        const payload = row.payload || {};
         const formattedRow: Record<string, any> = {
-          'respondent_id': row.respondent_id || 'N/A',
-          'Date de soumission': new Date(row.created_at).toLocaleString()
+          'respondent_id': row.respondent_id || row.id || 'N/A',
+          'Date de soumission': getDateStr(row)
         };
 
         questions.forEach(q => {
-          let answer = row.payload[q.id];
+          let answer = payload[q.id];
           if (Array.isArray(answer)) {
             answer = answer.join(', ');
           }
