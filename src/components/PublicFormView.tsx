@@ -112,25 +112,10 @@ export default function PublicFormView() {
             const res = await supabase
               .from('questionnaires')
               .select('*')
-              .or(`dashboard_token.eq.${id},custom_slug.eq.${id}`)
+              .eq('custom_slug', id)
               .maybeSingle();
             qData = res.data;
             qError = res.error;
-
-            if (!qData && !qError) {
-              try {
-                const idRes = await supabase
-                  .from('questionnaires')
-                  .select('*')
-                  .eq('id', id)
-                  .maybeSingle();
-                if (idRes.data) {
-                  qData = idRes.data;
-                }
-              } catch (err) {
-                console.warn('Silent fallback check on id failed (possibly because id column is a UUID column):', err);
-              }
-            }
           }
 
           if (!qError && qData) {

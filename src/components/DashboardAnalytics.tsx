@@ -162,21 +162,6 @@ export default function DashboardAnalytics() {
               .maybeSingle();
             qData = res.data;
             qError = res.error;
-
-            if (!qData && !qError) {
-              try {
-                const idRes = await supabase
-                  .from('questionnaires')
-                  .select(selectFields)
-                  .eq('id', id || '')
-                  .maybeSingle();
-                if (idRes.data) {
-                  qData = idRes.data;
-                }
-              } catch (err) {
-                console.warn('Silent fallback check on id failed on DashboardAnalytics (possibly because id column is a UUID column):', err);
-              }
-            }
           }
         }
           
