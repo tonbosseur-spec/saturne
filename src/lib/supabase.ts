@@ -19,12 +19,12 @@ export function getSupabaseCredentials() {
     !envKey.includes('YOUR_SUPABASE')
   );
 
-  const url = customUrl || (isEnvValid ? envUrl : '');
-  const key = customKey || (isEnvValid ? envKey : '');
+  const url = (isEnvValid ? envUrl : '') || customUrl;
+  const key = (isEnvValid ? envKey : '') || customKey;
 
   const isConfigured = Boolean(url && key && url.startsWith('http'));
 
-  return { url, key, isConfigured, source: customUrl ? 'local' : (isEnvValid ? 'env' : 'none') };
+  return { url, key, isConfigured, source: isEnvValid ? 'env' : (customUrl ? 'local' : 'none') };
 }
 
 export function isSupabaseConfigured(): boolean {
