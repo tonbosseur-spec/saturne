@@ -342,61 +342,88 @@ ON CONFLICT (email) DO NOTHING;
                   )}
                   <div>
                     <p className="font-bold text-sm sm:text-base">
-                      {creds.isConfigured ? 'Supabase est configuré' : 'Supabase non configuré'}
+                      {creds.isConfigured ? 'Base de données active' : 'Supabase non configuré'}
                     </p>
                     <p className="text-xs opacity-80 mt-0.5">
-                      {creds.isConfigured 
-                        ? `Source: ${creds.source === 'local' ? 'Configuration locale (navigateur)' : 'Variables d\'environnement'}`
+                      {creds.source === 'env'
+                        ? 'Base de données centralisée active via le fichier d\'environnement (.env). Tous les utilisateurs et navigateurs se connectent automatiquement à cette base.'
+                        : creds.isConfigured
+                        ? 'Configuration spécifique enregistrée dans ce navigateur.'
                         : 'Entrez l\'URL et la clé anonyme de votre projet Supabase ci-dessous.'}
                     </p>
                   </div>
                 </div>
 
-                {creds.isConfigured && (
+                {creds.isConfigured && creds.source === 'local' && (
                   <button
                     onClick={handleReset}
-                    className="text-xs text-slate-500 hover:text-red-600 underline font-medium"
+                    className="text-xs text-slate-500 hover:text-red-600 underline font-medium shrink-0"
                   >
                     Réinitialiser
                   </button>
                 )}
               </div>
 
-              {/* URL Input */}
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-slate-700 flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-slate-400" />
-                    Supabase Project URL
-                  </span>
-                  <span className="text-xs text-slate-400 font-normal">Ex: https://xyz.supabase.co</span>
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://your-project.supabase.co"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:bg-white font-mono text-sm transition-all"
-                />
-              </div>
+              {creds.source === 'env' ? (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Identifiants globaux appliqués (.env)</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    L'application est directement configurée avec les variables <strong>VITE_SUPABASE_URL</strong> et <strong>VITE_SUPABASE_ANON_KEY</strong>. Aucun utilisateur n'a besoin de configurer de clé sur son navigateur.
+                  </p>
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
+                    <span className="text-xs font-mono text-slate-500 truncate max-w-[300px]">URL: {url}</span>
+                    <button
+                      onClick={handleTest}
+                      disabled={isTesting}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
+                    >
+                      {isTesting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                      Tester la connexion
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* URL Input */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-bold text-slate-700 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-slate-400" />
+                        Supabase Project URL
+                      </span>
+                      <span className="text-xs text-slate-400 font-normal">Ex: https://xyz.supabase.co</span>
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://your-project.supabase.co"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:bg-white font-mono text-sm transition-all"
+                    />
+                  </div>
 
-              {/* Key Input */}
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-slate-700 flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Key className="w-4 h-4 text-slate-400" />
-                    Supabase Anon / Public Key
-                  </span>
-                  <span className="text-xs text-slate-400 font-normal">Clé publique 'anon'</span>
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:bg-white font-mono text-xs transition-all"
-                />
-              </div>
+                  {/* Key Input */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-bold text-slate-700 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Key className="w-4 h-4 text-slate-400" />
+                        Supabase Anon / Public Key
+                      </span>
+                      <span className="text-xs text-slate-400 font-normal">Clé publique 'anon'</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      value={key}
+                      onChange={(e) => setKey(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:bg-white font-mono text-xs transition-all"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Test Connection Output */}
               {testResult && (
@@ -423,26 +450,27 @@ ON CONFLICT (email) DO NOTHING;
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button
-                  onClick={handleTest}
-                  disabled={isTesting || !url || !key}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold text-sm rounded-2xl transition-all"
-                >
-                  {isTesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                  Tester la connexion
-                </button>
+              {creds.source !== 'env' && (
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    onClick={handleTest}
+                    disabled={isTesting || !url || !key}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold text-sm rounded-2xl transition-all"
+                  >
+                    {isTesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                    Tester la connexion
+                  </button>
 
-                <button
-                  onClick={handleSave}
-                  disabled={!url || !key}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-sm rounded-2xl transition-all shadow-md shadow-emerald-600/20"
-                >
-                  <Check className="w-4 h-4" />
-                  Enregistrer & Appliquer
-                </button>
-              </div>
+                  <button
+                    onClick={handleSave}
+                    disabled={!url || !key}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-sm rounded-2xl transition-all shadow-md shadow-emerald-600/20"
+                  >
+                    <Check className="w-4 h-4" />
+                    Enregistrer & Appliquer
+                  </button>
+                </div>
+              )}
 
               {/* Help tip */}
               <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-100 text-blue-900 text-xs space-y-1">
