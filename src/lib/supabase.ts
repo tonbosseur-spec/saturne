@@ -1,12 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const STORAGE_URL_KEY = 'custom_supabase_url';
-const STORAGE_ANON_KEY = 'custom_supabase_anon_key';
-
 export function getSupabaseCredentials() {
-  const customUrl = localStorage.getItem(STORAGE_URL_KEY)?.trim() || '';
-  const customKey = localStorage.getItem(STORAGE_ANON_KEY)?.trim() || '';
-
   const envUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
   const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
@@ -16,15 +10,16 @@ export function getSupabaseCredentials() {
     !envUrl.includes('YOUR_SUPABASE') &&
     envKey &&
     !envKey.includes('placeholder') &&
-    !envKey.includes('YOUR_SUPABASE')
+    !envKey.includes('YOUR_SUPABASE') &&
+    envUrl.startsWith('http')
   );
 
-  const url = (isEnvValid ? envUrl : '') || customUrl;
-  const key = (isEnvValid ? envKey : '') || customKey;
-
-  const isConfigured = Boolean(url && key && url.startsWith('http'));
-
-  return { url, key, isConfigured, source: isEnvValid ? 'env' : (customUrl ? 'local' : 'none') };
+  return { 
+    url: isEnvValid ? envUrl : '', 
+    key: isEnvValid ? envKey : '', 
+    isConfigured: isEnvValid, 
+    source: isEnvValid ? 'env' : 'none' 
+  };
 }
 
 export function isSupabaseConfigured(): boolean {
@@ -45,41 +40,20 @@ export function getSupabaseClient(): SupabaseClient {
   return clientInstance;
 }
 
-export function saveSupabaseCredentials(url: string, key: string) {
-  const cleanUrl = url.trim();
-  const cleanKey = key.trim();
-
-  if (cleanUrl) {
-    localStorage.setItem(STORAGE_URL_KEY, cleanUrl);
-  } else {
-    localStorage.removeItem(STORAGE_URL_KEY);
-  }
-
-  if (cleanKey) {
-    localStorage.setItem(STORAGE_ANON_KEY, cleanKey);
-  } else {
-    localStorage.removeItem(STORAGE_ANON_KEY);
-  }
-
-  // Reset cached instance
-  const { url: newUrl, key: newKey, isConfigured } = getSupabaseCredentials();
-  const finalUrl = isConfigured ? newUrl : 'https://placeholder.supabase.co';
-  const finalKey = isConfigured ? newKey : 'placeholder-anon-key';
-
-  clientInstance = createClient(finalUrl, finalKey);
+export function saveSupabaseCredentials(_url: string, _key: string) {
+  // No-op: Credentials are managed exclusively via environment variables (.env)
+  localStorage.removeItem('custom_supabase_url');
+  localStorage.removeItem('custom_supabase_anon_key');
 }
 
-export async function testSupabaseConnection(customUrl?: string, customKey?: string): Promise<{ success: boolean; message: string }> {
+export async function testSupabaseConnection(): Promise<{ success: boolean; message: string }> {
   try {
     const creds = getSupabaseCredentials();
-    const url = customUrl?.trim() || creds.url;
-    const key = customKey?.trim() || creds.key;
-
-    if (!url || !key || !url.startsWith('http')) {
-      return { success: false, message: 'URL ou Clé API invalide. L\'URL doit commencer par https://' };
+    if (!creds.isConfigured) {
+      return { success: false, message: 'Supabase n\'est pas configuré dans le fichier d\'environnement (.env).' };
     }
 
-    const testClient = createClient(url, key);
+    const testClient = createClient(creds.url, creds.key);
     const { error } = await testClient.from('questionnaires').select('id').limit(1);
 
     if (error) {
@@ -106,4 +80,5 @@ export const supabase = new Proxy({} as SupabaseClient, {
     return val;
   }
 });
+
 

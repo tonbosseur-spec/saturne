@@ -266,11 +266,11 @@ export default function AdminHomeHub() {
               className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm border transition-all ${
                 isSupabaseConfigured()
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 shadow-sm'
-                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 animate-pulse'
+                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
               }`}
             >
               <Database className="w-4 h-4 text-emerald-600" />
-              <span>{isSupabaseConfigured() ? 'Supabase Connecté' : 'Lier Supabase'}</span>
+              <span>{isSupabaseConfigured() ? 'Supabase Connecté' : 'Statut Supabase'}</span>
               <Settings className="w-3.5 h-3.5 opacity-60 ml-1" />
             </motion.button>
 
@@ -351,9 +351,9 @@ export default function AdminHomeHub() {
                 <Database className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 text-base">Liez votre propre base de données Supabase</h3>
+                <h3 className="font-bold text-slate-800 text-base">Variables d'environnement Supabase manquantes</h3>
                 <p className="text-slate-600 text-xs sm:text-sm mt-0.5 max-w-2xl leading-relaxed">
-                  Pour enregistrer directement vos formulaires et recevoir les réponses dans votre base de données en temps réel, renseignez votre <strong>Project URL</strong> et votre <strong>Anon Key</strong>.
+                  Pour connecter la base de données, renseignez <strong>VITE_SUPABASE_URL</strong> et <strong>VITE_SUPABASE_ANON_KEY</strong> dans votre fichier <code>.env</code> ou dans les secrets de votre hébergeur.
                 </p>
               </div>
             </div>
@@ -364,7 +364,7 @@ export default function AdminHomeHub() {
               className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md transition-all shrink-0 flex items-center gap-2"
             >
               <Settings className="w-4 h-4" />
-              Configurer Supabase
+              Voir le statut
             </motion.button>
           </div>
         )}

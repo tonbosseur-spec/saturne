@@ -575,7 +575,7 @@ export default function FormBuilder() {
             title="Statut de la base de données Supabase"
           >
             <Database className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">{isSupabaseConfigured() ? 'Supabase OK' : 'Supabase non lié'}</span>
+            <span className="hidden sm:inline">{isSupabaseConfigured() ? 'Supabase OK' : 'Supabase non configuré'}</span>
             <Settings className="w-3 h-3 opacity-60" />
           </motion.button>
 
@@ -660,7 +660,7 @@ export default function FormBuilder() {
                     onClick={() => setIsSupabaseModalOpen(true)}
                     className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all"
                   >
-                    Configurer Supabase
+                    Voir le statut
                   </button>
                   <button onClick={() => setSaveStatus('idle')} className="text-amber-600 hover:text-amber-900 font-bold px-2">×</button>
                 </div>
