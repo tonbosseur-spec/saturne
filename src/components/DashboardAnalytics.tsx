@@ -145,15 +145,39 @@ export default function DashboardAnalytics() {
           qError = res.error;
           if (qData) targetId = qData.id;
         } else {
-          let query = supabase.from('questionnaires').select('id, title, description, company_name, estimated_duration, dashboard_token, custom_slug');
+          const selectFields = 'id, title, description, company_name, estimated_duration, dashboard_token, custom_slug';
           if (isValidUuid(id || '')) {
-            query = query.or(`id.eq.${id},custom_slug.eq.${id}`);
+            const res = await supabase
+              .from('questionnaires')
+              .select(selectFields)
+              .or(`id.eq.${id},custom_slug.eq.${id}`)
+              .maybeSingle();
+            qData = res.data;
+            qError = res.error;
           } else {
-            query = query.eq('custom_slug', id || '');
+            const res = await supabase
+              .from('questionnaires')
+              .select(selectFields)
+              .eq('custom_slug', id || '')
+              .maybeSingle();
+            qData = res.data;
+            qError = res.error;
+
+            if (!qData && !qError) {
+              try {
+                const idRes = await supabase
+                  .from('questionnaires')
+                  .select(selectFields)
+                  .eq('id', id || '')
+                  .maybeSingle();
+                if (idRes.data) {
+                  qData = idRes.data;
+                }
+              } catch (err) {
+                console.warn('Silent fallback check on id failed on DashboardAnalytics (possibly because id column is a UUID column):', err);
+              }
+            }
           }
-          const res = await query.maybeSingle();
-          qData = res.data;
-          qError = res.error;
         }
           
         if (qError || !qData) {

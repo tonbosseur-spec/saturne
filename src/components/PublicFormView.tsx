@@ -97,14 +97,41 @@ export default function PublicFormView() {
       try {
         let loaded = false;
         try {
-          let query = supabase.from('questionnaires').select('*');
-          if (isValidUuid(id)) {
-            query = query.or(`id.eq.${id},dashboard_token.eq.${id},custom_slug.eq.${id}`);
-          } else {
-            query = query.or(`dashboard_token.eq.${id},custom_slug.eq.${id}`);
-          }
+          let qData = null;
+          let qError = null;
 
-          const { data: qData, error: qError } = await query.maybeSingle();
+          if (isValidUuid(id)) {
+            const res = await supabase
+              .from('questionnaires')
+              .select('*')
+              .or(`id.eq.${id},dashboard_token.eq.${id},custom_slug.eq.${id}`)
+              .maybeSingle();
+            qData = res.data;
+            qError = res.error;
+          } else {
+            const res = await supabase
+              .from('questionnaires')
+              .select('*')
+              .or(`dashboard_token.eq.${id},custom_slug.eq.${id}`)
+              .maybeSingle();
+            qData = res.data;
+            qError = res.error;
+
+            if (!qData && !qError) {
+              try {
+                const idRes = await supabase
+                  .from('questionnaires')
+                  .select('*')
+                  .eq('id', id)
+                  .maybeSingle();
+                if (idRes.data) {
+                  qData = idRes.data;
+                }
+              } catch (err) {
+                console.warn('Silent fallback check on id failed (possibly because id column is a UUID column):', err);
+              }
+            }
+          }
 
           if (!qError && qData) {
             setQuestionnaire(qData);
