@@ -1,5 +1,5 @@
 export type QuestionnaireStatus = 'draft' | 'published';
-export type QuestionType = 'text' | 'multiple_choice' | 'checkbox' | 'number' | 'select';
+export type QuestionType = 'text' | 'multiple_choice' | 'checkbox' | 'number' | 'select' | 'date' | 'phone' | 'email';
 
 export interface Questionnaire {
   id?: string;
@@ -21,6 +21,8 @@ export interface QuestionnaireSettings {
   footer_text: string;
   header_bg_image: string;
   header_opacity: number;
+  start_button_text?: string;
+  show_meta_info?: boolean;
 }
 
 export interface Section {
@@ -31,8 +33,12 @@ export interface Section {
   conditional_logic?: {
     depends_on_code?: string;
     equals_value?: string;
+    button_url?: string;
+    button_text?: string;
   };
   is_completion_section?: boolean;
+  button_url?: string;
+  button_text?: string;
 }
 
 export interface QuestionOption {

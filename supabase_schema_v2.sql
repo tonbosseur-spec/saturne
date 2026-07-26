@@ -40,10 +40,14 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE responses
   ADD COLUMN respondent_id VARCHAR(20) DEFAULT generate_short_id(8) UNIQUE;
 
--- 4. Ajout du token de partage pour le Dashboard public (depuis l'étape précédente)
+-- 4. Ajout du token de partage pour le Dashboard public et personnalisation des boutons
 ALTER TABLE questionnaires
   ADD COLUMN dashboard_token UUID DEFAULT gen_random_uuid() UNIQUE,
   ADD COLUMN custom_slug VARCHAR(255) UNIQUE;
+
+ALTER TABLE questionnaire_settings 
+  ADD COLUMN IF NOT EXISTS start_button_text TEXT DEFAULT 'Commencer l''expérience',
+  ADD COLUMN IF NOT EXISTS show_meta_info BOOLEAN DEFAULT true;
 
 -- ==========================================
 -- SECURITE : ROW LEVEL SECURITY (RLS)

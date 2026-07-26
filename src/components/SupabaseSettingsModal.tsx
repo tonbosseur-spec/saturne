@@ -81,9 +81,15 @@ CREATE TABLE IF NOT EXISTS questionnaire_settings (
   footer_text TEXT,
   header_bg_image TEXT,
   header_opacity NUMERIC DEFAULT 1.0,
+  start_button_text TEXT DEFAULT 'Commencer l''expérience',
+  show_meta_info BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ajouter les colonnes manquantes si la table existait déjà
+ALTER TABLE questionnaire_settings ADD COLUMN IF NOT EXISTS start_button_text TEXT DEFAULT 'Commencer l''expérience';
+ALTER TABLE questionnaire_settings ADD COLUMN IF NOT EXISTS show_meta_info BOOLEAN DEFAULT true;
 
 -- 3. Table des sections
 CREATE TABLE IF NOT EXISTS sections (

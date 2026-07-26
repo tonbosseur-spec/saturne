@@ -47,19 +47,29 @@ export default function AdminHomeHub() {
       }
 
       let merged: Questionnaire[] = [];
-      if (supabaseActive) {
-        merged = sbList.map(q => ({
-          ...q,
-          responses: q.responses || [{ count: 0 }]
-        }));
-      } else {
-        const localList = getStoredQuestionnaires();
-        const map = new Map<string, Questionnaire>();
-        for (const q of localList) {
-          if (q.id && q.id !== 'demo-id') map.set(q.id, q);
-        }
-        merged = Array.from(map.values());
+      const localList = getStoredQuestionnaires();
+      const map = new Map<string, Questionnaire>();
+
+      // 1. Add local questionnaires
+      for (const q of localList) {
+        if (q.id && q.id !== 'demo-id') map.set(q.id, q);
       }
+
+      // 2. Merge/overlay Supabase questionnaires if active
+      if (supabaseActive) {
+        for (const q of sbList) {
+          if (q.id) {
+            const existing = map.get(q.id);
+            map.set(q.id, {
+              ...(existing || {}),
+              ...q,
+              responses: q.responses || existing?.responses || [{ count: 0 }]
+            });
+          }
+        }
+      }
+
+      merged = Array.from(map.values());
       
       // Seulement si aucune donnée ET que Supabase n'est PAS du tout configuré, afficher le demo-id
       if (merged.length === 0 && !supabaseActive) {
@@ -87,15 +97,30 @@ export default function AdminHomeHub() {
 
   const deleteQuestionnaire = async (id: string) => {
     try {
-      if (!isSupabaseConfigured()) {
-        deleteStoredQuestionnaire(id);
-      } else {
-        await supabase.from('questionnaires').delete().eq('id', id);
+      // 1. Always purge from LocalStorage
+      deleteStoredQuestionnaire(id);
+
+      // 2. If Supabase is configured, delete child records first then the parent questionnaire
+      if (isSupabaseConfigured()) {
+        try {
+          await supabase.from('responses').delete().eq('questionnaire_id', id);
+          await supabase.from('questions').delete().eq('questionnaire_id', id);
+          await supabase.from('sections').delete().eq('questionnaire_id', id);
+          await supabase.from('questionnaire_settings').delete().eq('questionnaire_id', id);
+
+          const { error } = await supabase.from('questionnaires').delete().eq('id', id);
+          if (error) {
+            console.error('Error deleting questionnaire from Supabase:', error);
+          }
+        } catch (sbErr) {
+          console.error('Supabase delete exception:', sbErr);
+        }
       }
+
       setQuestionnaires(prev => prev.filter(q => q.id !== id));
       setFormToDelete(null);
       showToast('Questionnaire supprimé avec succès.');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting:', error);
       alert('Erreur lors de la suppression.');
     }

@@ -44,7 +44,7 @@ export default function QuestionnaireDetail() {
         console.warn('Supabase fetch failed in QuestionnaireDetail:', sbErr);
       }
 
-      if (!loaded && !isSupabaseConfigured()) {
+      if (!loaded) {
         const localData = getStoredQuestionnaireData(id);
         if (localData && localData.questionnaire) {
           setQuestionnaire(localData.questionnaire);
@@ -57,16 +57,8 @@ export default function QuestionnaireDetail() {
             status: 'draft',
             dashboard_token: 'demo-token'
           });
+          loaded = true;
         }
-      } else if (!loaded && id === 'demo-id') {
-        setQuestionnaire({
-          id: 'demo-id',
-          title: 'Questionnaire de Démo',
-          description: 'Un questionnaire de démonstration',
-          status: 'draft',
-          dashboard_token: 'demo-token'
-        });
-        loaded = true;
       }
     } catch (error) {
       console.error('Error fetching questionnaire:', error);

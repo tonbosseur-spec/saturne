@@ -45,11 +45,25 @@ export function saveStoredQuestionnaire(
     if (settings) {
       localStorage.setItem(`${STORAGE_KEY_PREFIX_SETTINGS}${qId}`, JSON.stringify(settings));
     }
-    if (sections) {
+    if (sections && sections.length > 0) {
       localStorage.setItem(`${STORAGE_KEY_PREFIX_SECTIONS}${qId}`, JSON.stringify(sections));
     }
     if (questions) {
-      localStorage.setItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${qId}`, JSON.stringify(questions));
+      const existingRaw = localStorage.getItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${qId}`);
+      if (questions.length === 0 && existingRaw) {
+        try {
+          const existingArr = JSON.parse(existingRaw);
+          if (Array.isArray(existingArr) && existingArr.length > 0) {
+            console.warn('Prevented overwriting non-empty local questions with empty array for', qId);
+          } else {
+            localStorage.setItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${qId}`, JSON.stringify(questions));
+          }
+        } catch {
+          localStorage.setItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${qId}`, JSON.stringify(questions));
+        }
+      } else {
+        localStorage.setItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${qId}`, JSON.stringify(questions));
+      }
     }
   } catch (e) {
     console.error('Error saving questionnaire to localStorage:', e);
@@ -61,11 +75,19 @@ export function saveStoredQuestionnaire(
 export function deleteStoredQuestionnaire(id: string): void {
   try {
     const current = getStoredQuestionnaires();
-    const updated = current.filter(q => q.id !== id);
+    const target = current.find(q => q.id === id || q.dashboard_token === id || q.custom_slug === id);
+    const targetId = target?.id || id;
+
+    const updated = current.filter(q => q.id !== targetId && q.id !== id);
     localStorage.setItem(STORAGE_KEY_QUESTIONNAIRES, JSON.stringify(updated));
-    localStorage.removeItem(`${STORAGE_KEY_PREFIX_SETTINGS}${id}`);
-    localStorage.removeItem(`${STORAGE_KEY_PREFIX_SECTIONS}${id}`);
-    localStorage.removeItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${id}`);
+    localStorage.removeItem(`${STORAGE_KEY_PREFIX_SETTINGS}${targetId}`);
+    localStorage.removeItem(`${STORAGE_KEY_PREFIX_SECTIONS}${targetId}`);
+    localStorage.removeItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${targetId}`);
+    if (targetId !== id) {
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX_SETTINGS}${id}`);
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX_SECTIONS}${id}`);
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${id}`);
+    }
   } catch (e) {
     console.error('Error deleting questionnaire from localStorage:', e);
   }
@@ -74,13 +96,23 @@ export function deleteStoredQuestionnaire(id: string): void {
 export function getStoredQuestionnaireData(id: string) {
   try {
     const questionnaires = getStoredQuestionnaires();
-    const questionnaire = questionnaires.find(q => q.id === id || q.dashboard_token === id);
-    if (!questionnaire) return null;
-
-    const realId = questionnaire.id!;
+    let questionnaire = questionnaires.find(q => q.id === id || q.dashboard_token === id || q.custom_slug === id);
+    
+    const realId = questionnaire?.id || id;
     const settingsRaw = localStorage.getItem(`${STORAGE_KEY_PREFIX_SETTINGS}${realId}`);
     const sectionsRaw = localStorage.getItem(`${STORAGE_KEY_PREFIX_SECTIONS}${realId}`);
     const questionsRaw = localStorage.getItem(`${STORAGE_KEY_PREFIX_QUESTIONS}${realId}`);
+
+    if (!questionnaire && (settingsRaw || sectionsRaw || questionsRaw)) {
+      questionnaire = {
+        id: realId,
+        title: 'Questionnaire Sauvegardé',
+        description: '',
+        status: 'published',
+      };
+    }
+
+    if (!questionnaire) return null;
 
     return {
       questionnaire,

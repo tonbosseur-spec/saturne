@@ -9,7 +9,7 @@ import {
   ArrowLeft, Hash, Eye, EyeOff, PanelRightClose, PanelRightOpen, Copy,
   ExternalLink, Layers, Building2, HelpCircle, Share2, ArrowUp, ArrowDown,
   Sparkles, Sliders, ChevronDown, ChevronRight, X, Database, AlertCircle, Settings,
-  Clock, Link2
+  Clock, Link2, PlayCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import DataExport from './DataExport';
@@ -69,6 +69,7 @@ export default function FormBuilder() {
     footer_text: '© 2026 Votre Entreprise - Tous droits réservés.',
     header_bg_image: 'https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop',
     header_opacity: 0.85,
+    start_button_text: "Commencer l'expérience",
   });
 
   const [fontFamily, setFontFamily] = useState<string>("'Plus Jakarta Sans', sans-serif");
@@ -124,9 +125,9 @@ export default function FormBuilder() {
     }
   }, [id]);
 
-  // Always keep local storage updated in real-time if Supabase is not configured
+  // Always keep local storage updated in real-time as a reliable backup
   useEffect(() => {
-    if (hasLoadedData && questionnaire && questionnaire.id && !isSupabaseConfigured()) {
+    if (hasLoadedData && questionnaire && questionnaire.id) {
       saveStoredQuestionnaire(questionnaire, settings, sections, questions);
     }
   }, [hasLoadedData, questionnaire, settings, sections, questions]);
@@ -136,119 +137,162 @@ export default function FormBuilder() {
     setIsLoadingData(true);
     try {
       let fetchedFromSupabase = false;
-      try {
-        const { data: qData, error: qError } = await supabase
-          .from('questionnaires')
-          .select('*')
-          .eq('id', id)
-          .single();
+      let qData: Questionnaire | null = null;
 
-        if (!qError && qData) {
-          setQuestionnaire(qData);
-          fetchedFromSupabase = true;
-
-          const { data: sData } = await supabase
-            .from('questionnaire_settings')
+      if (isSupabaseConfigured()) {
+        try {
+          // 1. Fetch questionnaire header by ID
+          const { data: idRes } = await supabase
+            .from('questionnaires')
             .select('*')
-            .eq('questionnaire_id', id)
-            .single();
-          if (sData) setSettings(sData);
+            .eq('id', id)
+            .maybeSingle();
 
-          const { data: qsData } = await supabase
-            .from('questions')
-            .select('*')
-            .eq('questionnaire_id', id)
-            .order('display_order', { ascending: true });
-          const loadedQuestions = qsData || [];
-          if (loadedQuestions.length > 0) setQuestions(loadedQuestions);
+          qData = idRes;
 
-          const { data: secData } = await supabase
-            .from('sections')
-            .select('*')
-            .eq('questionnaire_id', id)
-            .order('display_order', { ascending: true });
+          // If not found by ID, try custom_slug or dashboard_token
+          if (!qData) {
+            const { data: slugRes } = await supabase
+              .from('questionnaires')
+              .select('*')
+              .eq('custom_slug', id)
+              .maybeSingle();
+            qData = slugRes;
+          }
 
-          let loadedSections = secData || [];
-          if (loadedSections.length === 0 && loadedQuestions.length > 0) {
-            const uniqueSectionIds = Array.from(new Set(loadedQuestions.map((q: any) => q.section_id).filter(Boolean)));
-            if (uniqueSectionIds.length > 0) {
-              loadedSections = uniqueSectionIds.map((secId, idx) => ({
-                id: secId as string,
-                questionnaire_id: id,
-                title: `Section ${idx + 1}`,
-                description: '',
-                display_order: idx
-              }));
+          if (!qData) {
+            const { data: tokenRes } = await supabase
+              .from('questionnaires')
+              .select('*')
+              .eq('dashboard_token', id)
+              .maybeSingle();
+            qData = tokenRes;
+          }
+
+          if (qData) {
+            setQuestionnaire(qData);
+            fetchedFromSupabase = true;
+            const realId = qData.id;
+
+            // Fetch Settings
+            const { data: sData } = await supabase
+              .from('questionnaire_settings')
+              .select('*')
+              .eq('questionnaire_id', realId)
+              .maybeSingle();
+
+            // Fetch Questions
+            const { data: qsData } = await supabase
+              .from('questions')
+              .select('*')
+              .eq('questionnaire_id', realId)
+              .order('display_order', { ascending: true });
+
+            // Fetch Sections
+            const { data: secData } = await supabase
+              .from('sections')
+              .select('*')
+              .eq('questionnaire_id', realId)
+              .order('display_order', { ascending: true });
+
+            // LocalStorage backup fallback check
+            const localData = getStoredQuestionnaireData(id) || getStoredQuestionnaireData(realId);
+
+            if (sData) {
+              setSettings(sData);
+            } else if (localData?.settings) {
+              setSettings(localData.settings);
             }
-          }
 
-          if (loadedSections.length === 0) {
-            loadedSections = [{
-              id: initialSectionId,
-              title: 'Section 1 : Informations Générales',
-              description: 'Merci de remplir vos informations ci-dessous.',
-              display_order: 0,
-            }];
-          }
+            let loadedQuestions = qsData && qsData.length > 0 ? qsData : [];
+            if (loadedQuestions.length === 0 && localData?.questions && localData.questions.length > 0) {
+              console.log('Restored questions from LocalStorage backup for', realId);
+              loadedQuestions = localData.questions;
+            }
+            setQuestions(loadedQuestions);
 
-          const mapped = loadedSections.map((s: any) => ({
-            ...s,
-            is_completion_section: s.is_completion_section || s.conditional_logic?.is_completion_section || false
-          }));
+            let loadedSections = secData && secData.length > 0 ? secData : [];
+            if (loadedSections.length === 0 && localData?.sections && localData.sections.length > 0) {
+              loadedSections = localData.sections;
+            }
 
-          if (!mapped.some((s: any) => s.is_completion_section)) {
-            mapped.push({
-              id: 'default-completion-sec',
-              title: 'Merci pour vos réponses !',
-              description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
-              display_order: mapped.length,
-              is_completion_section: true
-            });
+            if (loadedSections.length === 0 && loadedQuestions.length > 0) {
+              const uniqueSectionIds = Array.from(new Set(loadedQuestions.map((q: any) => q.section_id).filter(Boolean)));
+              if (uniqueSectionIds.length > 0) {
+                loadedSections = uniqueSectionIds.map((secId, idx) => ({
+                  id: secId as string,
+                  questionnaire_id: realId,
+                  title: `Section ${idx + 1}`,
+                  description: '',
+                  display_order: idx
+                }));
+              }
+            }
+
+            if (loadedSections.length === 0) {
+              loadedSections = [{
+                id: initialSectionId,
+                title: 'Section 1 : Informations Générales',
+                description: 'Merci de remplir vos informations ci-dessous.',
+                display_order: 0,
+              }];
+            }
+
+            const mapped = loadedSections.map((s: any) => ({
+              ...s,
+              is_completion_section: s.is_completion_section || s.conditional_logic?.is_completion_section || false,
+              button_url: s.button_url || s.conditional_logic?.button_url || '',
+              button_text: s.button_text || s.conditional_logic?.button_text || '',
+            }));
+
+            if (!mapped.some((s: any) => s.is_completion_section)) {
+              mapped.push({
+                id: 'default-completion-sec',
+                title: 'Merci pour vos réponses !',
+                description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
+                display_order: mapped.length,
+                is_completion_section: true
+              });
+            }
+            setSections(mapped);
           }
-          setSections(mapped);
+        } catch (err) {
+          console.warn('Supabase fetch failed, falling back to LocalStorage:', err);
         }
-      } catch (err) {
-        console.warn('Supabase fetch failed, fallback to local storage:', err);
       }
 
-      if (!fetchedFromSupabase && !isSupabaseConfigured()) {
+      // 2. LocalStorage fallback if not found on Supabase
+      if (!fetchedFromSupabase) {
         const localData = getStoredQuestionnaireData(id);
         if (localData && localData.questionnaire) {
           setQuestionnaire(localData.questionnaire);
           if (localData.settings) setSettings(localData.settings);
-          if (localData.sections && localData.sections.length > 0) {
-            const loadedSecs = [...localData.sections];
-            if (!loadedSecs.some(s => s.is_completion_section)) {
-              loadedSecs.push({
-                id: 'default-completion-sec',
-                title: 'Merci pour vos réponses !',
-                description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
-                display_order: loadedSecs.length,
-                is_completion_section: true
-              });
-            }
-            setSections(loadedSecs);
-          } else {
-            setSections([
+          if (localData.questions) setQuestions(localData.questions);
+
+          let loadedSecs = localData.sections && localData.sections.length > 0 ? [...localData.sections] : [];
+          if (loadedSecs.length === 0) {
+            loadedSecs = [
               {
                 id: initialSectionId,
                 title: 'Section 1 : Informations Générales',
                 description: 'Merci de remplir vos informations ci-dessous.',
                 display_order: 0,
-              },
-              {
-                id: 'default-completion-sec',
-                title: 'Merci pour vos réponses !',
-                description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
-                display_order: 1,
-                is_completion_section: true
               }
-            ]);
+            ];
           }
-          if (localData.questions && localData.questions.length > 0) setQuestions(localData.questions);
+          if (!loadedSecs.some(s => s.is_completion_section)) {
+            loadedSecs.push({
+              id: 'default-completion-sec',
+              title: 'Merci pour vos réponses !',
+              description: '<p>Vos informations ont été enregistrées en toute sécurité.</p>',
+              display_order: loadedSecs.length,
+              is_completion_section: true
+            });
+          }
+          setSections(loadedSecs);
+        } else {
+          setErrorMessage('Questionnaire introuvable.');
         }
-      } else if (!fetchedFromSupabase && isSupabaseConfigured()) {
-        setErrorMessage('Impossible de charger le questionnaire depuis Supabase.');
       }
     } catch (error) {
       console.error('Error fetching questionnaire data:', error);
@@ -954,6 +998,9 @@ export default function FormBuilder() {
                   >
                     <option value="text">Texte Court</option>
                     <option value="number">Numérique</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Téléphone</option>
+                    <option value="date">Date</option>
                     <option value="multiple_choice">Choix Unique (Radio)</option>
                     <option value="checkbox">Choix Multiple (Cases)</option>
                     <option value="select">Menu Déroulant</option>
@@ -1380,6 +1427,63 @@ export default function FormBuilder() {
                             placeholder="Saisissez votre message de remerciement, instructions de fin..."
                             minHeight="100px"
                           />
+                        </div>
+
+                        {/* Custom Button / Action Link */}
+                        <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80 space-y-2.5">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                            <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Bouton de redirection / Lien personnalisé de fin (Optionnel)</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-normal">
+                            Affiche un bouton d'action sur la page finale. Si vous mettez des liens dans votre message, ils seront automatiquement convertis en boutons et masqués du texte principal.
+                          </p>
+                          <div className="grid sm:grid-cols-2 gap-3 pt-1">
+                            <div>
+                              <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                                Texte du bouton
+                              </label>
+                              <input
+                                type="text"
+                                value={section.button_text || section.conditional_logic?.button_text || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateSection(section.id, {
+                                    button_text: val,
+                                    conditional_logic: {
+                                      ...(section.conditional_logic || {}),
+                                      button_text: val,
+                                      button_url: section.button_url || section.conditional_logic?.button_url || ''
+                                    }
+                                  });
+                                }}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 bg-white outline-none focus:border-blue-500"
+                                placeholder="ex: Visiter notre site web"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                                Lien destination (URL)
+                              </label>
+                              <input
+                                type="url"
+                                value={section.button_url || section.conditional_logic?.button_url || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateSection(section.id, {
+                                    button_url: val,
+                                    conditional_logic: {
+                                      ...(section.conditional_logic || {}),
+                                      button_text: section.button_text || section.conditional_logic?.button_text || '',
+                                      button_url: val
+                                    }
+                                  });
+                                }}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 bg-white outline-none focus:border-blue-500"
+                                placeholder="ex: https://mon-site.com"
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -1924,6 +2028,40 @@ export default function FormBuilder() {
                     <p className="text-[10px] text-slate-400 mt-1 leading-tight">
                       Laissez vide pour calculer automatiquement en fonction du nombre de questions (30 sec par question).
                     </p>
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                {/* Bouton d'accueil pour démarrer */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <PlayCircle className="w-3.5 h-3.5 text-blue-600" /> Bouton de démarrage
+                  </h3>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Texte du bouton pour démarrer</label>
+                    <input
+                      type="text"
+                      placeholder="Commencer l'expérience"
+                      value={settings.start_button_text !== undefined ? settings.start_button_text : "Commencer l'expérience"}
+                      onChange={(e) => setSettings({ ...settings, start_button_text: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                      Texte affiché sur le bouton de la page d'accueil (ex: "Démarrer le test", "Commencer", "Répondre").
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={settings.show_meta_info !== false}
+                        onChange={(e) => setSettings({ ...settings, show_meta_info: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-semibold text-slate-700">Afficher les statistiques (sections et questions) sur la page d'accueil</span>
+                    </label>
                   </div>
                 </div>
 

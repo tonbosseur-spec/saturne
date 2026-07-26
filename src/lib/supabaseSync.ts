@@ -39,12 +39,16 @@ export async function syncQuestionnaireToSupabase(
     let fullSections = sections;
     let fullQuestions = questions;
 
-    if (!fullSettings || !fullSections || !fullQuestions) {
+    if (!fullSettings || !fullSections || fullSections.length === 0 || !fullQuestions || fullQuestions.length === 0) {
       const stored = getStoredQuestionnaireData(qId) || (q.id ? getStoredQuestionnaireData(q.id) : null);
       if (stored) {
         fullSettings = fullSettings || stored.settings;
-        fullSections = fullSections || stored.sections;
-        fullQuestions = fullQuestions || stored.questions;
+        if (!fullSections || fullSections.length === 0) {
+          fullSections = stored.sections && stored.sections.length > 0 ? stored.sections : fullSections;
+        }
+        if (!fullQuestions || fullQuestions.length === 0) {
+          fullQuestions = stored.questions && stored.questions.length > 0 ? stored.questions : fullQuestions;
+        }
       }
     }
 
@@ -150,6 +154,8 @@ export async function syncQuestionnaireToSupabase(
         footer_text: fullSettings.footer_text || null,
         header_bg_image: fullSettings.header_bg_image || null,
         header_opacity: fullSettings.header_opacity ?? 1.0,
+        start_button_text: fullSettings.start_button_text || "Commencer l'expérience",
+        show_meta_info: fullSettings.show_meta_info !== false,
         updated_at: new Date().toISOString(),
       };
       let { error: sError } = await supabase
@@ -165,9 +171,13 @@ export async function syncQuestionnaireToSupabase(
     if (fullSections && fullSections.length > 0) {
       const sectionsToUpsert = fullSections.map((s, index) => {
         const condLogic = s.conditional_logic || {};
+        const btnUrl = s.button_url || (condLogic as any).button_url || '';
+        const btnText = s.button_text || (condLogic as any).button_text || '';
         const conditional_logic = {
           ...condLogic,
-          is_completion_section: s.is_completion_section || (condLogic as any).is_completion_section || false
+          is_completion_section: s.is_completion_section || (condLogic as any).is_completion_section || false,
+          button_url: btnUrl,
+          button_text: btnText,
         };
         return {
           id: s.id || `sec_${index}_${crypto.randomUUID().substring(0, 8)}`,
@@ -180,25 +190,6 @@ export async function syncQuestionnaireToSupabase(
           updated_at: new Date().toISOString(),
         };
       });
-
-      // Delete sections that are no longer present
-      try {
-        const { data: existingSections } = await supabase
-          .from('sections')
-          .select('id')
-          .eq('questionnaire_id', finalId);
-
-        if (existingSections && existingSections.length > 0) {
-          const existingIds = existingSections.map(s => s.id);
-          const idsToKeep = sectionsToUpsert.map(s => s.id);
-          const idsToDelete = existingIds.filter(id => !idsToKeep.includes(id));
-          if (idsToDelete.length > 0) {
-            await supabase.from('sections').delete().in('id', idsToDelete);
-          }
-        }
-      } catch (err) {
-        console.warn('Error deleting orphaned sections from Supabase:', err);
-      }
 
       const { error: secError } = await supabase.from('sections').upsert(sectionsToUpsert);
       if (secError) {
@@ -249,6 +240,26 @@ export async function syncQuestionnaireToSupabase(
         }
       } catch (err) {
         console.warn('Error deleting orphaned questions from Supabase:', err);
+      }
+
+      // Delete sections that are no longer present (safe to do now since orphaned questions are deleted)
+      try {
+        const { data: existingSections } = await supabase
+          .from('sections')
+          .select('id')
+          .eq('questionnaire_id', finalId);
+
+        if (existingSections && existingSections.length > 0) {
+          // Re-calculate ids to keep based on the sections array that was passed in
+          const idsToKeep = fullSections?.map(s => s.id) || [];
+          const existingIds = existingSections.map(s => s.id);
+          const idsToDelete = existingIds.filter(id => !idsToKeep.includes(id));
+          if (idsToDelete.length > 0) {
+            await supabase.from('sections').delete().in('id', idsToDelete);
+          }
+        }
+      } catch (err) {
+        console.warn('Error deleting orphaned sections from Supabase:', err);
       }
 
       const { error: qstError } = await supabase.from('questions').upsert(questionsToUpsert);

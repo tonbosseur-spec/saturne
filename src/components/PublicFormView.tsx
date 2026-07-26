@@ -11,6 +11,8 @@ import GlassCard from './GlassCard';
 import { TextInput, RadioCard, CheckboxCard } from './FormInputs';
 import { getStoredQuestionnaireData } from '../lib/storage';
 import { RichTextRenderer } from './RichTextEditor';
+import { COUNTRY_CODES } from '../data/countryCodes';
+import { CountryCodeSelect } from './CountryCodeSelect';
 
 const generateShortId = () => Math.random().toString(36).substring(2, 10);
 
@@ -49,6 +51,25 @@ const extractLinks = (text: string | null | undefined): { url: string; label: st
   }
 
   return links;
+};
+
+const cleanTextWithoutLinks = (text: string | null | undefined): string => {
+  if (!text) return '';
+  let clean = text;
+
+  // 1. Strip HTML anchor tags <a ...>...</a>
+  clean = clean.replace(/<a\s+(?:[^>]*?\s+)?href=["'][^"']+["'](?:[^>]*)?>([\s\S]*?)<\/a>/gi, '');
+
+  // 2. Strip Markdown links [text](url)
+  clean = clean.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/gi, '');
+
+  // 3. Strip raw URLs (https://... or http://...)
+  clean = clean.replace(/https?:\/\/[^\s<"']+/gi, '');
+
+  // 4. Strip empty paragraphs or line breaks left behind
+  clean = clean.replace(/<p>\s*(?:<br\s*\/?>)*\s*<\/p>/gi, '');
+
+  return clean.trim();
 };
 
 export default function PublicFormView() {
@@ -174,7 +195,7 @@ export default function PublicFormView() {
           console.warn('Supabase fetch failed in PublicFormView:', sbErr);
         }
 
-        if (!loaded && !isSupabaseConfigured()) {
+        if (!loaded) {
           const localData = getStoredQuestionnaireData(id);
           if (localData && localData.questionnaire) {
             setQuestionnaire(localData.questionnaire);
@@ -320,13 +341,7 @@ export default function PublicFormView() {
 
   const currentSection = visibleSections[currentSectionIndex] || visibleSections[0];
   const currentQuestions = questions
-    .filter(q => {
-      const sectionExists = sections.some(s => s.id === q.section_id);
-      if (sectionExists) {
-        return q.section_id === currentSection?.id;
-      }
-      return currentSection?.id === visibleSections[0]?.id;
-    })
+    .filter(q => q.section_id === currentSection?.id)
     .filter(shouldShowQuestion);
 
   const isLastSection = visibleSections.length > 0 && currentSectionIndex === visibleSections.length - 1;
@@ -352,6 +367,11 @@ export default function PublicFormView() {
       }
 
       if (!isValEmpty) {
+        if (q.type === 'email' && typeof val === 'string' && !val.includes('@')) {
+          errors[q.id] = 'Veuillez entrer une adresse e-mail valide.';
+          isValid = false;
+        }
+
         const isOtherSelected = (Array.isArray(val) && val.includes('__OTHER__')) || val === '__OTHER__';
         if (isOtherSelected) {
           const otherText = answers[q.id + '_other'];
@@ -405,9 +425,14 @@ export default function PublicFormView() {
   };
 
   const handlePrev = () => {
-    setDirection(-1);
-    setCurrentSectionIndex(prev => prev - 1);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (currentSectionIndex > 0) {
+      setDirection(-1);
+      setCurrentSectionIndex(prev => prev - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setStarted(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleInputChange = (qId: string, val: any) => {
@@ -433,7 +458,18 @@ export default function PublicFormView() {
         await new Promise(resolve => setTimeout(resolve, 1200));
         setIsSubmitted(true);
       } else {
-        const payload = { ...answers };
+        const payload: Record<string, any> = {};
+        for (const [key, value] of Object.entries(answers)) {
+          if (!key.endsWith('_other')) {
+            if (Array.isArray(value) && value.includes('__OTHER__')) {
+              payload[key] = value.map(v => v === '__OTHER__' ? `Autre: ${answers[`${key}_other`] || ''}` : v);
+            } else if (value === '__OTHER__') {
+              payload[key] = `Autre: ${answers[`${key}_other`] || ''}`;
+            } else {
+              payload[key] = value;
+            }
+          }
+        }
 
         const { error } = await supabase
           .from('responses')
@@ -532,6 +568,57 @@ export default function PublicFormView() {
             hasError={hasError}
             mainColor={mainColor}
             placeholder="Saisissez votre réponse ici..."
+            onChange={(e) => handleInputChange(q.id, e.target.value)}
+            value={answers[q.id] || ''}
+            className="!py-4 !text-base sm:!text-lg font-medium"
+          />
+        );
+      case 'email':
+        return (
+          <TextInput
+            type="email"
+            hasError={hasError}
+            mainColor={mainColor}
+            placeholder="Exemple : nom@domaine.com"
+            onChange={(e) => handleInputChange(q.id, e.target.value)}
+            value={answers[q.id] || ''}
+            className="!py-4 !text-base sm:!text-lg font-medium"
+          />
+        );
+      case 'phone':
+        return (
+          <div className="flex gap-2.5 items-center">
+            <CountryCodeSelect
+              value={answers[`${q.id}_country`] || '+33'}
+              hasError={hasError}
+              mainColor={mainColor}
+              onChange={(code) => {
+                handleInputChange(`${q.id}_country`, code);
+                const currentNumber = answers[`${q.id}_number`] || '';
+                handleInputChange(q.id, currentNumber ? `${code} ${currentNumber}` : '');
+              }}
+            />
+            <TextInput
+              type="tel"
+              hasError={hasError}
+              mainColor={mainColor}
+              placeholder="Numéro de téléphone"
+              onChange={(e) => {
+                handleInputChange(`${q.id}_number`, e.target.value);
+                const currentCountry = answers[`${q.id}_country`] || '+33';
+                handleInputChange(q.id, e.target.value ? `${currentCountry} ${e.target.value}` : '');
+              }}
+              value={answers[`${q.id}_number`] || ''}
+              className="!py-3.5 !text-base sm:!text-lg font-medium flex-1"
+            />
+          </div>
+        );
+      case 'date':
+        return (
+          <TextInput
+            type="date"
+            hasError={hasError}
+            mainColor={mainColor}
             onChange={(e) => handleInputChange(q.id, e.target.value)}
             value={answers[q.id] || ''}
             className="!py-4 !text-base sm:!text-lg font-medium"
@@ -827,11 +914,13 @@ export default function PublicFormView() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold text-slate-700 bg-white/80 border border-white/60 shadow-xs">
-                  Section {currentSectionIndex + 1} sur {visibleSections.length}
-                </span>
-              </div>
+              {settings?.show_meta_info !== false && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="px-3 py-1 rounded-full text-xs font-extrabold text-slate-700 bg-white/80 border border-white/60 shadow-xs">
+                    Section {currentSectionIndex + 1} sur {visibleSections.length}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Fine progress bar under floating header */}
@@ -891,18 +980,22 @@ export default function PublicFormView() {
                   initial={{ y: 15, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.15 }}
-                  className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full text-xs font-extrabold text-slate-700 bg-white/70 backdrop-blur-xl border border-white/60 shadow-lg shadow-slate-900/5 mb-6"
+                  className="inline-flex flex-wrap items-center justify-center gap-2.5 px-4 py-2 rounded-full text-xs font-extrabold text-slate-700 bg-white/70 backdrop-blur-xl border border-white/60 shadow-lg shadow-slate-900/5 mb-6"
                 >
-                  <span className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
                     <Clock className="w-3.5 h-3.5 text-blue-600" />
                     ⏱️ ~{estimatedMinutes} min de réponse
                   </span>
-                  <span className="text-slate-300">•</span>
-                  <span>📋 {sections.length} {sections.length > 1 ? 'sections' : 'section'} ({questions.length} questions)</span>
+                  {settings?.show_meta_info !== false && (
+                    <>
+                      <span className="text-slate-300 hidden sm:inline">•</span>
+                      <span className="whitespace-nowrap">📋 {sections.length} {sections.length > 1 ? 'sections' : 'section'} ({questions.length} questions)</span>
+                    </>
+                  )}
                   {questionnaire.company_name && (
                     <>
-                      <span className="text-slate-300">•</span>
-                      <span className="text-slate-600 flex items-center gap-1">
+                      <span className="text-slate-300 hidden sm:inline">•</span>
+                      <span className="text-slate-600 flex items-center gap-1 whitespace-nowrap">
                         <Building2 className="w-3.5 h-3.5 text-slate-400" />
                         {questionnaire.company_name}
                       </span>
@@ -952,7 +1045,7 @@ export default function PublicFormView() {
                   }}
                 >
                   <span className="relative z-10 flex items-center gap-3">
-                    Commencer l'expérience
+                    {settings?.start_button_text || "Commencer l'expérience"}
                     <ArrowRight className="w-6 h-6 transition-transform group-hover:translate-x-1" />
                   </span>
                   <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -985,38 +1078,65 @@ export default function PublicFormView() {
                   {matchingCompletionSection ? matchingCompletionSection.title : "Merci pour vos réponses !"}
                 </h2>
                 <div className="text-slate-600 text-sm sm:text-lg font-medium leading-relaxed max-w-md mx-auto markdown-body break-words">
-                  {matchingCompletionSection ? (
-                    <RichTextRenderer content={matchingCompletionSection.description} />
-                  ) : (
+                  {matchingCompletionSection ? (() => {
+                    const explicitUrl = matchingCompletionSection.button_url || matchingCompletionSection.conditional_logic?.button_url;
+                    const detectedLinks = extractLinks(matchingCompletionSection.description);
+                    const hasButtons = Boolean(explicitUrl) || detectedLinks.length > 0;
+                    
+                    const textToRender = hasButtons 
+                      ? cleanTextWithoutLinks(matchingCompletionSection.description) 
+                      : matchingCompletionSection.description;
+
+                    return textToRender ? (
+                      <RichTextRenderer content={textToRender} />
+                    ) : null;
+                  })() : (
                     <p>Vos informations ont été enregistrées en toute sécurité.</p>
                   )}
                 </div>
               </div>
 
               {matchingCompletionSection && (() => {
+                const explicitUrl = matchingCompletionSection.button_url || matchingCompletionSection.conditional_logic?.button_url;
+                const explicitText = matchingCompletionSection.button_text || matchingCompletionSection.conditional_logic?.button_text;
                 const detectedLinks = extractLinks(matchingCompletionSection.description);
-                if (detectedLinks.length === 0) return null;
+
+                const buttons: { url: string; label: string }[] = [];
+
+                if (explicitUrl) {
+                  buttons.push({
+                    url: explicitUrl,
+                    label: explicitText || "Visiter le lien"
+                  });
+                }
+
+                for (const link of detectedLinks) {
+                  if (!buttons.some(b => b.url === link.url)) {
+                    const label = link.label === "Ouvrir le lien" 
+                      ? (explicitText || `${link.url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 30)}${link.url.replace(/^https?:\/\/(www\.)?/, '').length > 30 ? '...' : ''}`)
+                      : link.label;
+                    buttons.push({ url: link.url, label });
+                  }
+                }
+
+                if (buttons.length === 0) return null;
+
                 return (
                   <div className="flex flex-col gap-2.5 justify-center items-center py-2 max-w-md mx-auto w-full">
-                    {detectedLinks.map((link, index) => {
-                      const displayLabel = link.label === "Ouvrir le lien" 
-                        ? `${link.url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 30)}${link.url.replace(/^https?:\/\/(www\.)?/, '').length > 30 ? '...' : ''}`
-                        : link.label;
-                      return (
-                        <motion.a
-                          key={index}
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          whileHover={{ scale: 1.02, y: -1 }}
-                          whileTap={{ scale: 0.98 }}
-                          className="w-full inline-flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/60 rounded-2xl shadow-sm transition-all text-xs sm:text-base group"
-                        >
-                          <span className="truncate pr-2">{displayLabel}</span>
-                          <ExternalLink className="w-4 h-4 flex-shrink-0 text-indigo-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                        </motion.a>
-                      );
-                    })}
+                    {buttons.map((btn, index) => (
+                      <motion.a
+                        key={index}
+                        href={btn.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        whileHover={{ scale: 1.02, y: -1 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full inline-flex items-center justify-between gap-3 px-5 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-500/20 transition-all text-sm sm:text-base group"
+                      >
+                        <span className="truncate pr-2">{btn.label}</span>
+                        <ExternalLink className="w-4 h-4 flex-shrink-0 text-white/80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </motion.a>
+                    ))}
                   </div>
                 );
               })()}
@@ -1123,7 +1243,7 @@ export default function PublicFormView() {
               {/* Navigation Controls with keyboard margin clearance */}
               <div className="pt-6 pb-4 flex items-center justify-between gap-4">
                 <div>
-                  {currentSectionIndex > 0 && (
+                  
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       type="button"
@@ -1134,7 +1254,7 @@ export default function PublicFormView() {
                       <ArrowLeft className="w-4 h-4" />
                       Précédent
                     </motion.button>
-                  )}
+                  
                 </div>
 
                 <div>
